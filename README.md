@@ -2,7 +2,7 @@
 
 A unique and interactive portfolio website that mimics the Visual Studio Code interface, providing a familiar and engaging experience for developers.
 
-![Portfolio Preview](screenshot.png)
+![image](https://github.com/user-attachments/assets/b1b6b47f-a2dd-4fe6-bd1f-0d01e644cfe0)
 
 ## ✨ Features
 
