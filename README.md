@@ -1,72 +1,113 @@
-# VS Code-Themed Portfolio 🚀
+# VS Code-Themed Portfolio with AI Integration 🚀
 
-A unique and interactive portfolio website that mimics the Visual Studio Code interface, providing a familiar and engaging experience for developers.
+An innovative portfolio website that replicates the Visual Studio Code interface while incorporating advanced AI features for interactive user engagement. Built with React, TypeScript, and Google's Gemini AI.
 
 ![image](https://github.com/user-attachments/assets/b1b6b47f-a2dd-4fe6-bd1f-0d01e644cfe0)
 
-## ✨ Features
+## 🌟 Key Features
 
-### 1. VS Code-Like Interface
-- Faithful recreation of VS Code's layout and design
-- Working activity bar, sidebar, and editor tabs
-- Interactive terminal with custom commands
-- File explorer with expandable sections
-- Status bar with git info and indicators
+### 1. AI-Powered Interactive Chat
+- 🤖 Integrated with Google's Gemini AI API for natural conversations
+- 💡 Context-aware responses about experience, skills, and projects
+- ⚡ Real-time streaming responses with typing indicators
+- 📝 Markdown and code block support with syntax highlighting
+- 🔄 Conversation memory and context maintenance
+- 🎯 Custom prompts and quick-start suggestions
 
-### 2. Interactive Components
-- 💻 Fully functional terminal with commands:
-  - `skills` - List all technical skills
-  - `about` - Show personal information
-  - `help` - Display available commands
-  - `clear` - Clear terminal output
-- 🤖 AI-powered chat assistant (using Google's Gemini API)
-- 📂 File explorer with VS Code-like navigation
-- 🔍 Working search functionality
+### 2. VS Code Interface Recreation
+- 🎨 Pixel-perfect VS Code UI components
+- 📁 Fully functional file explorer with dynamic routing
+- 💻 Interactive terminal with custom commands:
+  ```bash
+  skills     # List technical skills with categories
+  about      # Display personal information
+  help       # Show available commands
+  clear      # Clear terminal output
+  ```
+- 🔍 Working search functionality with real-time filtering
+- 📊 Git-like status bar with live indicators
 
-### 3. Portfolio Sections
-- 👨‍💻 Experience timeline with detailed work history
-- 🚀 Project showcase with live demos and GitHub stats
-- 🎓 Education background
-- 🏆 Achievements and certifications
-- 📚 Research publications
+### 3. Advanced UI Features
+- 🎭 Framer Motion animations for smooth transitions
+- 🌓 Custom context menus and tooltips
+- 📱 Responsive design with mobile-first approach
+- ⌨️ Keyboard shortcuts support
+- 🖼️ Dynamic breadcrumbs navigation
+- 📍 Minimap with code preview
+- 🎯 File tabs with drag-and-drop support
 
-### 4. Technical Features
-- ⚡ Built with React + TypeScript
-- 🎨 Styled with TailwindCSS
-- 🔄 Smooth animations with Framer Motion
-- 📱 Responsive design
-- 🌐 AI integration with Google's Gemini API
-- 🎯 SEO optimized
+### 4. Portfolio Content
+- 📈 Dynamic experience timeline with animations
+- 🎯 Project cards with live GitHub stats integration
+- 🎓 Interactive education section
+- 🏆 Animated achievements showcase
+- 📚 Research publications with external links
 
-### 5. UI/UX Elements
-- Full screen mode
-- Custom notifications
-- File tabs management
-- Working breadcrumbs
-- Context menus
-- Minimap support
-- Custom scrollbars
+## 🛠️ Technical Architecture
 
-## 🛠️ Tech Stack
-- React 18
-- TypeScript
-- TailwindCSS
-- Framer Motion
-- Lucide Icons
-- Google Generative AI
-- React Markdown
-
-## 🚀 Getting Started
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/vscode-portfolio.git
+### Frontend Stack
+```typescript
+const techStack = {
+  core: ['React 18', 'TypeScript', 'Vite'],
+  styling: ['TailwindCSS', 'Framer Motion'],
+  state: ['React Hooks', 'Context API'],
+  icons: ['Lucide React'],
+  ai: ['Google Generative AI'],
+  utils: ['React Markdown', 'Date-fns']
+};
 ```
 
-2. Install dependencies:
+### Key Technical Features
+- 🔥 Server-Side Events for real-time AI responses
+- 🔄 Custom hooks for terminal and file system operations
+- 🎨 Advanced TailwindCSS configurations with custom animations
+- 🔍 Optimized rendering with React.memo and useMemo
+- 📦 Module federation for dynamic imports
+- 🌐 SEO optimizations with meta tags
+
+## 🚀 Quick Start
+
+1. Clone and install:
 ```bash
+git clone https://github.com/yourusername/vscode-portfolio.git
 cd vscode-portfolio
 npm install
 ```
 
-3. Create a `.env` file and add your Google Gemini API key:
+2. Configure environment:
+```bash
+# .env
+VITE_GEMINI_API_KEY=your_api_key_here
+```
+
+3. Start development server:
+```bash
+npm run dev
+```
+
+## 💡 AI Chat Features
+
+The integrated AI chat system offers:
+- Natural language understanding of portfolio content
+- Real-time code explanations and syntax highlighting
+- Context-aware responses about projects and experience
+- Multi-turn conversations with memory
+- Custom prompt templates for common queries
+- Voice input support (coming soon)
+
+## 🎯 Development Features
+
+- 📦 Modular component architecture
+- 🔄 Custom hooks for common functionality
+- 🎨 Themed components with TailwindCSS
+- 🌐 API integration with TypeScript types
+- 📱 Responsive breakpoint system
+- 🧪 Unit test setup with Vitest
+
+## 🤝 Contributing
+
+Contributions are welcome! Please check our [Contributing Guidelines](CONTRIBUTING.md).
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
