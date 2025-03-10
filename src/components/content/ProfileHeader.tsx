@@ -53,7 +53,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ showToast }) => {
               <div className="relative h-36 w-36 rounded-full bg-[#121212] border-4 border-[#2a2a2a] p-1 shadow-inner flex items-center justify-center overflow-hidden">
                 {/* Replace with an actual image */}
                 <div className="bg-gradient-to-br from-[#252525] to-[#1a1a1a] h-full w-full rounded-full flex items-center justify-center">
-                  <User className="w-16 h-16 text-blue-400/70" />
+                  <img className='scale-110' src='https://media.licdn.com/dms/image/v2/D5603AQHE3lHpmACq7A/profile-displayphoto-shrink_800_800/profile-displayphoto-shrink_800_800/0/1710183002291?e=1747267200&v=beta&t=ayVhrZ_tQ1JX8F5VYjGnKo4VF_mZ2juhuW0apLtcOFw'/>
                 </div>
               </div>
             </div>
@@ -139,7 +139,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ showToast }) => {
               </a>
               
               <a 
-                href="https://linkedin.https://www.linkedin.com/in/ry4/" 
+                href="https://www.linkedin.com/in/ry4/" 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="flex items-center justify-between bg-[#1e1e1e] hover:bg-[#252525] border border-[#333333] hover:border-blue-700/30 p-4 rounded-xl transition-all group hover:shadow-xl hover:shadow-blue-900/10"
