@@ -67,7 +67,7 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
     {
       id: '1',
       role: 'system',
-      content: `👋 Hi, I'm Rohit Yadav, a Software Engineer with ${experienceData[0].period.split('–')[0]} of experience in AI, ML, and cloud technologies. Currently working at ${experienceData[0].title.split('|')[0].trim()}.`,
+      content: `👋 Hi, I'm Rohit Yadav, a skilled software engineer with a strong background in AI, machine learning, and full-stack development. With a proven track record of delivering high-impact projects.`,
       timestamp: new Date(Date.now() - 1000 * 60 * 5),
       status: 'complete'
     }
