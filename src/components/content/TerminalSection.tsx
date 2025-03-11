@@ -282,38 +282,38 @@ const TerminalSection: React.FC = () => {
   };
 
   return (
-    <div className={`absolute bottom-6 z-10 min-w-full right-0  bg-[#252526] border border-indigo-900/30 rounded-md transition-all duration-300  ${
+    <div className={`absolute bottom-6 z-10 min-w-full right-0 bg-[#1e1e1e] border border-[#3c3c3c] rounded-md transition-all duration-300 ${
       isMinimized ? 'h-9' : 'sm:h-72 h-60'
     }`}>
       {/* Terminal Header */}
-      <div className="h-9 bg-gradient-to-r from-[#1a1b26] to-[#252840] flex items-center justify-between px-3 border-b border-indigo-900/50 rounded-t-md">
+      <div className="h-9 bg-[#252526] flex items-center justify-between px-3 border-b border-[#3c3c3c] rounded-t-md">
         <div className="flex items-center space-x-2">
   
-          <Terminal className="w-4 h-4 text-indigo-400" />
-          <span className="text-blue-300 font-medium text-sm">rohit@portfolio:~</span>
+          <Terminal className="w-4 h-4 text-gray-400" />
+          <span className="text-gray-300 font-medium text-sm">rohit@portfolio:~</span>
         </div>
         <div className="flex items-center space-x-3">
-          {isLoading && <RefreshCw className="w-3.5 h-3.5 text-indigo-400 animate-spin" />}
+          {isLoading && <RefreshCw className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
           {!isCopied ? (
             <button 
               onClick={copyToClipboard} 
-              className="hover:bg-[#2d3748] p-1 rounded transition-colors group"
+              className="hover:bg-[#4c4c4c] p-1 rounded transition-colors group"
               aria-label="Copy terminal content"
             >
-              <ClipboardCopy className="w-3 h-3 text-gray-400 group-hover:text-indigo-200 transition-colors" />
+              <ClipboardCopy className="w-3 h-3 text-gray-400 group-hover:text-gray-200 transition-colors" />
             </button>
           ) : (
-            <Check className="w-4 h-4 text-purple-500" />
+            <Check className="w-4 h-4 text-gray-300" />
           )}
           <button 
             onClick={() => setIsMinimized(!isMinimized)}
-            className="hover:bg-[#2d3748] p-1 rounded transition-colors group"
+            className="hover:bg-[#4c4c4c] p-1 rounded transition-colors group"
             aria-label={isMinimized ? "Maximize" : "Minimize"}
           >
             {isMinimized ? (
-              <Maximize2 className="w-3 h-3 text-gray-400 group-hover:text-indigo-200 transition-colors" />
+              <Maximize2 className="w-3 h-3 text-gray-400 group-hover:text-gray-200 transition-colors" />
             ) : (
-              <Minimize2 className="w-3 h-3 text-gray-400 group-hover:text-indigo-200 transition-colors" />
+              <Minimize2 className="w-3 h-3 text-gray-400 group-hover:text-gray-200 transition-colors" />
             )}
           </button>
         </div>
@@ -323,26 +323,25 @@ const TerminalSection: React.FC = () => {
       {!isMinimized && (
         <div 
           ref={terminalRef}
-          className="h-[calc(100%-36px)] overflow-y-auto custom-scrollbar p-3 font-mono text-sm backdrop-blur-sm"
+          className="h-[calc(100%-36px)] overflow-y-auto custom-scrollbar p-3 font-mono text-sm"
           style={{ 
             scrollbarWidth: 'thin', 
-            scrollbarColor: '#2d3748 #1a202c', 
-            textShadow: '0 0 1px rgba(79, 70, 229, 0.2)',
-            backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(20, 25, 50, 0.4) 0%, rgba(10, 15, 24, 0.8) 100%)'
+            scrollbarColor: '#4c4c4c #1e1e1e', 
+            backgroundColor: '#1e1e1e'
           }}
         >
           <div className="mb-3 text-gray-400 text-xs">
-            <span className="text-indigo-500 font-semibold">Welcome to Portfolio Terminal v2.0.3</span><span className="text-gray-500"> | Type</span> <span className="text-purple-400">'help'</span> <span className="text-gray-500">for available commands.</span>
+            <span className="text-gray-300 font-semibold">Welcome to Portfolio Terminal v2.0.3</span><span className="text-gray-500"> | Type</span> <span className="text-gray-300">'help'</span> <span className="text-gray-500">for available commands.</span>
             <div className="text-xs text-gray-600 mt-1">
-              • Use <span className="text-indigo-400">Tab</span> to autocomplete • <span className="text-indigo-400">↑/↓</span> arrows for history • <span className="text-indigo-400">clear</span> to reset
+              • Use <span className="text-gray-400">Tab</span> to autocomplete • <span className="text-gray-400">↑/↓</span> arrows for history • <span className="text-gray-400">clear</span> to reset
             </div>
           </div>
           
           {/* Command history */}
           {commandHistory.map((cmd, index) => (
             <div key={index} className="mt-4 animate-fadeIn">
-              <p className="text-purple-400 flex items-center">
-                <span className="text-blue-400 mr-2">rohit@portfolio:~$</span> {cmd}
+              <p className="text-gray-300 flex items-center">
+                <span className="text-gray-400 mr-2">rohit@portfolio:~$</span> {cmd}
               </p>
               {index === commandHistory.length - 1 && output}
             </div>
@@ -350,7 +349,7 @@ const TerminalSection: React.FC = () => {
           
           {/* Interactive prompt */}
           <div className="mt-4 flex items-center group">
-            <span className="text-blue-400 mr-2">rohit@portfolio:~$</span>
+            <span className="text-gray-400 mr-2">rohit@portfolio:~$</span>
             <div className="flex-grow flex items-center">
               <input 
                 ref={inputRef}
@@ -358,13 +357,13 @@ const TerminalSection: React.FC = () => {
                 value={terminalCommand}
                 onChange={(e) => setTerminalCommand(e.target.value)}
                 onKeyDown={handleKeyDown}
-                className="bg-transparent border-none outline-none text-purple-400 flex-grow caret-transparent"
+                className="bg-transparent border-none outline-none text-gray-300 flex-grow caret-transparent"
                 placeholder="Type a command..."
                 autoComplete="off"
                 spellCheck="false"
               />
               {terminalCommand === "" && (
-                <span className={`w-2 h-5 bg-indigo-500 ${cursorVisible ? 'opacity-100' : 'opacity-0'} transition-opacity duration-100 shadow-[0_0_5px_rgba(99,102,241,0.7)]`}></span>
+                <span className={`w-2 h-5 bg-gray-400 ${cursorVisible ? 'opacity-100' : 'opacity-0'} transition-opacity duration-100`}></span>
               )}
             </div>
           </div>
