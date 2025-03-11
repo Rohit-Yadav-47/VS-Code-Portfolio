@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Menu as MenuIcon,
-  ChevronRight
+  ChevronRight,
+  Monitor
 } from 'lucide-react';
 
 // Component imports
-
 import MenuBar from './components/layout/MenuBar';
 import ActivityBar from './components/layout/ActivityBar';
 import Explorer from './components/layout/Explorer';
 import EditorTabs from './components/layout/EditorTabs';
 import StatusBar from './components/layout/StatusBar';
 import EditorPills from './components/layout/EditorPills';
-import Breadcrumbs from './components/layout/Breadcrumbs'; // Add this import
+import Breadcrumbs from './components/layout/Breadcrumbs';
 import ProfileHeader from './components/content/ProfileHeader';
 import ExperienceSection from './components/content/ExperienceSection';
 import ProjectsSection from './components/content/ProjectsSection';
@@ -21,10 +21,7 @@ import AchievementsSection from './components/content/AchievementsSection';
 import ResearchSection from './components/content/ResearchSection';
 import TerminalSection from './components/content/TerminalSection';
 import Notification from './components/ui/Notification';
-
 import Minimap from './components/ui/Copilot';
-
-
 
 // Data imports
 import { 
@@ -52,6 +49,33 @@ function App() {
   const [warningCount, setWarningCount] = useState(2);
   const [gitBranch, setGitBranch] = useState('main');
   const [showBreadcrumbs, setShowBreadcrumbs] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const [showDesktopHint, setShowDesktopHint] = useState(true);
+  
+  // Check if device is mobile
+  useEffect(() => {
+    const checkIfMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      
+      // Show desktop hint for 5 seconds when on mobile
+      if (mobile) {
+        setShowDesktopHint(true);
+        setTimeout(() => setShowDesktopHint(false), 5000);
+      } else {
+        setShowDesktopHint(false);
+      }
+    };
+    
+    // Initial check
+    checkIfMobile();
+    
+    // Add event listener for resize
+    window.addEventListener('resize', checkIfMobile);
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkIfMobile);
+  }, []);
   
   useEffect(() => {
     setAnimateContent(true);
@@ -120,18 +144,34 @@ function App() {
         <Notification message={notificationMessage} />
       )}
       
-      {/* Fixed Header Section */}
-      <div className="fixed top-0 left-0 right-0 z-50">
-        <MenuBar />
+      {/* Desktop Mode Hint - Fixed position with animation */}
+      {isMobile && showDesktopHint && (
+        <div className="fixed top-12 right-4 z-50 bg-blue-600 text-white px-3 py-2 rounded-md shadow-lg text-sm max-w-[180px] flex items-center animate-fadeIn">
+          <Monitor size={16} className="mr-2 flex-shrink-0" />
+          <span>Switch to desktop mode for all features</span>
+          <button 
+            className="ml-2 text-white/80 hover:text-white"
+            onClick={() => setShowDesktopHint(false)}
+          >
+            ×
+          </button>
+        </div>
+      )}
+      
+      {/* Fixed Header Section - Scaled down for mobile */}
+      <div className={`fixed top-0 left-0 right-0 z-50 ${isMobile ? 'h-8' : ''}`}>
+        <div className={isMobile ? 'transform scale-75 origin-top-left' : ''}>
+          <MenuBar />
+        </div>
       </div>
 
       {/* Mobile Menu Button - adjusted top position */}
       <button
-        className="md:hidden fixed left-4 top-12 z-40 bg-[#2d2d2d] p-2 rounded-full shadow-lg hover:bg-[#3d3d3d] transition-colors"
+        className="md:hidden fixed left-4 top-10 z-40 bg-[#2d2d2d] p-2 rounded-full shadow-lg hover:bg-[#3d3d3d] transition-colors"
         onClick={toggleMobileMenu}
         aria-label="Toggle mobile menu"
       >
-        <MenuIcon className="w-6 h-6 text-blue-400" />
+        <MenuIcon className="w-5 h-5 text-blue-400" />
       </button>
 
       {/* Mobile Navigation Overlay */}
@@ -139,75 +179,100 @@ function App() {
         <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-30" onClick={() => setIsMobileMenuOpen(false)}>
           <div className="bg-[#252526] w-3/4 h-full p-4 overflow-y-auto shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-blue-400 mb-4 border-b border-[#3c3c3c] pb-2">Sections</h3>
-            <div className="space-y-3">
-              {['experience', 'projects', 'education', 'achievements', 'research'].map(section => (
+            <div className="space-y-2">
+              {['about', 'experience', 'projects', 'education', 'achievements', 'research'].map(section => (
                 <button
                   key={section}
-                  className={`flex items-center w-full p-3 rounded ${
+                  className={`flex items-center w-full p-2 rounded ${
                     activeSection === section 
                       ? 'bg-[#37373d] text-white shadow-md' 
                       : 'hover:bg-[#37373d] text-gray-300'
                   } transition-all duration-200`}
                   onClick={() => {
                     setActiveSection(section);
-                    addTab(`${section}.js`);
+                    if (section !== 'about') {
+                      addTab(`${section}.js`);
+                    }
                   }}
                 >
                   <span className="capitalize font-medium">{section}</span>
                 </button>
               ))}
             </div>
+            
+            {/* Desktop mode suggestion */}
+            <div className="mt-6 p-3 bg-[#2d2d30] rounded-md border border-[#3c3c3c] text-sm">
+              <div className="flex items-center text-blue-400 mb-2">
+                <Monitor size={16} className="mr-2" />
+                <span className="font-medium">Pro Tip:</span>
+              </div>
+              <p>Use desktop mode to access all features including terminal, copilot, and code explorer.</p>
+            </div>
           </div>
         </div>
       )}
 
       {/* Content area - adjusted margins */}
-      <div className="flex flex-1 pt-8 overflow-hidden">
-        <ActivityBar 
-          activeSection={activeSection} 
-          setActiveSection={setActiveSection}
-          errorCount={errorCount}
-          warningCount={warningCount}
-        />
+      <div className={`flex flex-1 ${isMobile ? 'pt-8' : 'pt-8'} overflow-hidden`}>
+        {/* Hide ActivityBar and Explorer on mobile */}
+        <div className="hidden md:block">
+          <ActivityBar 
+            activeSection={activeSection} 
+            setActiveSection={setActiveSection}
+            errorCount={errorCount}
+            warningCount={warningCount}
+          />
+        </div>
 
-        <Explorer 
-          expandedItems={expandedItems}
-          toggleExpand={toggleExpand}
-          activeSection={activeSection}
-          setActiveSection={setActiveSection}
-          addTab={addTab}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-        />
+        <div className="hidden md:block">
+          <Explorer 
+            expandedItems={expandedItems}
+            toggleExpand={toggleExpand}
+            activeSection={activeSection}
+            setActiveSection={setActiveSection}
+            addTab={addTab}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+          />
+        </div>
 
         <div className="flex-1 relative flex flex-col">
-          <div className="md:ml-72 ml-0 flex flex-1 flex-col h-full relative"> {/* Added relative positioning */}
-            <EditorTabs 
-              activeTabs={activeTabs}
-              activeSection={activeSection}
-              setActiveSection={setActiveSection}
-              closeTab={closeTab}
-            />
+          <div className={`md:ml-72 ml-0 flex flex-1 flex-col h-full relative ${isMobile ? 'pt-2' : ''}`}>
+            {/* Make tabs more compact on mobile */}
+            <div className={isMobile ? 'transform scale-90 origin-top-left' : ''}>
+              <EditorTabs 
+                activeTabs={activeTabs}
+                activeSection={activeSection}
+                setActiveSection={setActiveSection}
+                closeTab={closeTab}
+              />
+            </div>
             
-            {showBreadcrumbs && (
+            {/* Only show breadcrumbs on desktop */}
+            {showBreadcrumbs && !isMobile && (
               <Breadcrumbs activeSection={activeSection} />
             )}
             
-            <EditorPills 
-              activePill={activePill}
-              setActivePill={setActivePill}
-            />
+            {/* Only show editor pills on desktop */}
+            {!isMobile && (
+              <EditorPills 
+                activePill={activePill}
+                setActivePill={setActivePill}
+              />
+            )}
 
             {/* Scrollable content area with proper padding */}
             <div className="flex-1 overflow-y-auto custom-scrollbar pt-0 relative">
-              {/* Add VS Code-like indent guides */}
-              <div className="absolute top-0 left-12 bottom-0 w-6 flex flex-col items-center z-0 pointer-events-none">
-                <div className="h-full w-px bg-[#3c3c3c] opacity-30"></div>
-              </div>
+              {/* Add VS Code-like indent guides (only on desktop) */}
+              {!isMobile && (
+                <div className="absolute top-0 left-12 bottom-0 w-6 flex flex-col items-center z-0 pointer-events-none">
+                  <div className="h-full w-px bg-[#3c3c3c] opacity-30"></div>
+                </div>
+              )}
               
               {/* Main content with proper padding */}
-              <div className="px-4 py-6 relative mb-64"> {/* Added margin bottom for terminal */}
-                <div className={`${animateContent ? 'opacity-0' : 'opacity-100'} transition-all md:pl-12 md:pr-20`}>
+              <div className={`px-4 py-6 relative ${!isMobile ? 'mb-64' : 'mb-10'}`}>
+                <div className={`${animateContent ? 'opacity-0' : 'opacity-100'} transition-all ${isMobile ? 'pl-1 pr-1' : 'md:pl-12 md:pr-20'}`}>
                   {activeSection === 'about' && (
                     <ProfileHeader showToast={showToast} />
                   )}
@@ -236,24 +301,26 @@ function App() {
             </div>
           </div>
 
-     
-          
-          {/* Minimap overlay with correct positioning */}
-          {showMinimap && (
+          {/* Minimap overlay - only show on desktop */}
+          {showMinimap && !isMobile && (
             <Minimap />
           )}
         </div>
 
-        {/* Terminal Section - Moved inside main content area */}
-        <TerminalSection />
+        {/* Terminal Section - only show on desktop */}
+        {!isMobile && (
+          <TerminalSection />
+        )}
       </div>
 
-      {/* Status Bar - adjust z-index to be above terminal */}
-      <StatusBar 
-        gitBranch={gitBranch}
-        errorCount={errorCount}
-        warningCount={warningCount}
-      />
+      {/* Status Bar - adjust z-index to be above terminal and scaled for mobile */}
+      <div className={isMobile ? 'transform scale-75 origin-bottom-left' : ''}>
+        <StatusBar 
+          gitBranch={gitBranch}
+          errorCount={errorCount}
+          warningCount={warningCount}
+        />
+      </div>
 
       {/* Global styles */}
       <style jsx global>{`
@@ -299,6 +366,24 @@ function App() {
           left: 0;
           height: 100%;
           border-left: 1px solid rgba(60, 60, 60, 0.3);
+        }
+        
+        /* Mobile optimization */
+        @media (max-width: 767px) {
+          .custom-scrollbar {
+            -webkit-overflow-scrolling: touch;
+          }
+          
+          /* Adjust content display for mobile */
+          .mobile-content {
+            padding: 0.5rem !important;
+          }
+          
+          /* Status bar mobile styling */
+          .status-bar-mobile {
+            height: 1.5rem;
+            font-size: 0.75rem;
+          }
         }
       `}</style>
     </div>
