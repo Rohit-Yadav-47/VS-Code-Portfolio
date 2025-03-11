@@ -20,7 +20,11 @@ An innovative portfolio website that replicates the Visual Studio Code interface
 - 📁 Fully functional file explorer with dynamic routing
 - 💻 Interactive terminal with custom commands:
   ```bash
+  neofetch   # Display system info with ASCII art
   skills     # List technical skills with categories
+  exp        # Show detailed work experience
+  projects   # View projects with descriptions
+  achievements # Display achievements and awards
   about      # Display personal information
   help       # Show available commands
   clear      # Clear terminal output
