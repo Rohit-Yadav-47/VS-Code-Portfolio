@@ -106,7 +106,7 @@ const EducationSection: React.FC<EducationSectionProps> = ({ data }) => {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    className="flex items-center text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                    className="flex items-center text-xs sm:text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
                   >
                     <span>Learn more</span>
                     <ExternalLink className="w-3 h-3 ml-1" />
