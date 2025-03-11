@@ -362,9 +362,7 @@ const TerminalSection: React.FC = () => {
                 autoComplete="off"
                 spellCheck="false"
               />
-              {terminalCommand === "" && (
-                <span className={`w-2 h-5 bg-gray-400 ${cursorVisible ? 'opacity-100' : 'opacity-0'} transition-opacity duration-100`}></span>
-              )}
+              
             </div>
           </div>
           <div ref={bottomRef} /> {/* Anchor for auto-scrolling */}
