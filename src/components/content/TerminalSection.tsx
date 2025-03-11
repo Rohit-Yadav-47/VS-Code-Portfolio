@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, ClipboardCopy, Check, Maximize2, Minimize2, RefreshCw, Github, Linkedin, Mail, Cpu } from 'lucide-react';
+import { Terminal, ClipboardCopy, Check, Maximize2, Minimize2, RefreshCw} from 'lucide-react';
 
 // Essential resume data
 const resumeData = {
@@ -87,10 +87,7 @@ const TerminalSection: React.FC = () => {
     }
   }, [commandHistory, output]);
 
-  // Initialize with neofetch command
-  useEffect(() => {
-    processCommand('neofetch');
-  }, []);
+  
 
   const copyToClipboard = () => {
     const textToCopy = Object.entries(resumeData.skills)
@@ -285,7 +282,7 @@ const TerminalSection: React.FC = () => {
   };
 
   return (
-    <div className={`absolute bottom-6 z-10 min-w-full right-0 bg-gradient-to-r from-gray-900 to-[#0d1117] border border-indigo-900/30 rounded-md transition-all duration-300 shadow-[0_0_15px_rgba(79,70,229,0.2)] ${
+    <div className={`absolute bottom-6 z-10 min-w-full right-0  bg-[#252526] border border-indigo-900/30 rounded-md transition-all duration-300  ${
       isMinimized ? 'h-9' : 'sm:h-72 h-60'
     }`}>
       {/* Terminal Header */}

@@ -11,7 +11,10 @@ import {
   Lightbulb,
   Zap,
   Split,
-  Trash
+  Trash,
+  Bookmark,
+  Code,
+  Briefcase
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { 
@@ -38,7 +41,11 @@ type MessageType = {
   timestamp: Date;
   status?: 'sending' | 'error' | 'complete';
   codeBlocks?: string[];
+  category?: 'general' | 'technical' | 'career';
+  saved?: boolean;
 };
+
+type Theme = 'dark' | 'light';
 
 const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
   initiallyOpen = true,
@@ -61,25 +68,63 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [hideQuickStart, setHideQuickStart] = useState(false);
   
-  // Initial welcome message with data from personalData
+  // Initial welcome message with intro about Rohit
   const [messages, setMessages] = useState<MessageType[]>([
     {
       id: '1',
       role: 'system',
-      content: `👋 Hi, I'm Rohit Yadav, a skilled software engineer with a strong background in AI, machine learning, and full-stack development. With a proven track record of delivering high-impact projects.`,
+      content: `👋 Hi, I'm Rohit's AI assistant. Rohit is a skilled software engineer with experience in:
+
+• Full-stack development with React, TypeScript, and Node.js
+• Machine learning and AI systems
+• Cloud architecture on AWS and GCP
+• Mobile app development with React Native
+
+You can ask me anything about Rohit's experience, skills, or projects, and I'll help you learn more about his background and expertise.`,
       timestamp: new Date(Date.now() - 1000 * 60 * 5),
-      status: 'complete'
+      status: 'complete',
+      category: 'general'
     }
   ]);
 
-
   const quickStarters = [
-    "Tell me about your most challenging project",
-    "What's your experience with React and TypeScript?",
-    "How do you approach problem-solving?",
-    "What are your team collaboration experiences?"
+    {
+      text: "Tell me about your most challenging project",
+      category: "code",
+      icon: <Code size={12} />
+    },
+    {
+      text: "What's your experience with React and TypeScript?",
+      category: "code",
+      icon: <Code size={12} />
+    },
+    {
+      text: "How do you approach problem-solving?",
+      category: "work",
+      icon: <Lightbulb size={12} />
+    },
+    {
+      text: "What are your team collaboration experiences?",
+      category: "work",
+      icon: <Briefcase size={12} />
+    }
   ];
+
+  // Theme styles
+  const themeStyles = {
+    bg: 'bg-[#1e1e1e]',
+    header: 'bg-[#252526]',
+    sidebar: 'bg-[#1e1e1e] text-gray-200',
+    input: 'bg-[#2d2d2d] border-[#3c3c3c]',
+    hover: 'hover:bg-[#3c3c3c]',
+    border: 'border-[#3c3c3c]',
+    userMessage: 'bg-gradient-to-r from-indigo-900 to-purple-900',
+    assistantMessage: 'bg-[#2d2d2d]',
+    systemMessage: 'bg-[#333333]',
+    codeBlock: 'bg-[#1a1a1a] border-[#444]',
+  };
 
   useEffect(() => {
     if (messagesEndRef.current && isOpen) {
@@ -129,6 +174,7 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
         Achievements: ${achievementsData.map(a => a.title).join(', ')}
 
         Always respond in first person as if you are Rohit Yadav. Be conversational, professional, and highlight your achievements when relevant.
+        If discussing code, include well-formatted examples with syntax highlighting.
         
         User message: ${userMessage}
       `;
@@ -142,47 +188,14 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
       return "I'm sorry, I encountered an issue connecting to my knowledge base. Please try again in a moment.";
     }
   };
-  
-  // Function to simulate responses based on the question (for demonstration)
-  // const simulateResponse = (query: string) => {
-  //   const lowerQuery = query.toLowerCase();
-    
-  //   if (lowerQuery.includes('project') || lowerQuery.includes('portfolio')) {
-  //     return `I've worked on several significant projects throughout my career. Some highlights include:
 
-  // 1. ${personalData.projects[0].title} - ${personalData.projects[0].description}
-  // 2. ${personalData.projects[1].title} - ${personalData.projects[1].description}
-
-  // Would you like me to elaborate on any specific project?`;
-  //   }
-    
-  //   if (lowerQuery.includes('skills') || lowerQuery.includes('technologies')) {
-  //     return `I'm proficient in a variety of technologies. My core skills include:
-
-  // ${personalData.skills.slice(0, 8).join(', ')}
-
-  // I also have experience with ${personalData.skills.slice(8, 12).join(', ')} and am always expanding my technical toolkit.`;
-  //   }
-    
-  //   if (lowerQuery.includes('education') || lowerQuery.includes('degree')) {
-  //     return `Regarding my education: ${personalData.education}`;
-  //   }
-    
-  //   if (lowerQuery.includes('experience') || lowerQuery.includes('work history')) {
-  //     return `I have ${personalData.experience} years of professional experience in software development. 
-  // I've worked across multiple domains including ${personalData.domains.join(', ')}.`;
-  //   }
-    
-  //   return `Thanks for your question! As a software engineer with ${personalData.experience} years of experience, 
-  // I've developed expertise in ${personalData.skills.slice(0, 3).join(', ')} and other technologies.
-
-  // Is there something specific about my background or experience you'd like to know more about?`;
-  // };
-
-  // Enhanced handleSubmit with Gemini API integration
+  // Simplified handleSubmit without categories
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
+    
+    // Hide quick starters after sending a message
+    setHideQuickStart(true);
     
     const newUserMessage: MessageType = {
       id: Date.now().toString(),
@@ -229,7 +242,8 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
           content: displayedResponse,
           timestamp: new Date(),
           status: charIndex < response.length - 1 ? 'sending' : 'complete',
-          codeBlocks
+          codeBlocks,
+          saved: false
         };
         
         setMessages(prev => {
@@ -276,6 +290,7 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
 
   const handleQuickStarterClick = (starter: string) => {
     setMessage(starter);
+    setHideQuickStart(true);
     if (textareaRef.current) {
       textareaRef.current.focus();
     }
@@ -310,6 +325,16 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
     setShowContextMenu(false);
   };
 
+  const toggleSaveMessage = (messageId: string) => {
+    setMessages(prev => 
+      prev.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, saved: !msg.saved }
+          : msg
+      )
+    );
+  };
+
   // Function to extract and format code blocks
   const formatMessageContent = (content: string) => {
     const parts = content.split(/(```[\s\S]+?```)/g);
@@ -318,23 +343,27 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
         const language = part.match(/```(\w*)/)?.[1] || '';
         const code = part.replace(/```[\w]*\n|```$/g, '');
         return (
-          <div key={index} className="my-2 relative group">
-            <div className="absolute top-0 right-0 bg-[#2d2d2d] text-gray-400 text-xs px-2 py-1 rounded-bl opacity-0 group-hover:opacity-100 transition-opacity">
-              {language || 'code'}
+          <div key={index} className={`my-3 relative group rounded-md overflow-hidden border ${themeStyles.codeBlock}`}>
+            <div className="flex justify-between items-center px-3 py-2 text-xs font-mono border-b border-gray-700">
+              <span>{language || 'code'}</span>
               <button 
-                className="ml-2 hover:text-white"
+                className="hover:text-blue-400 transition-colors"
                 onClick={() => handleCopyCode(code)}
               >
-                {isCopying ? <Check size={12} /> : <Copy size={12} />}
+                {isCopying ? (
+                  <span className="flex items-center gap-1"><Check size={14} /> Copied</span>
+                ) : (
+                  <span className="flex items-center gap-1"><Copy size={14} /> Copy</span>
+                )}
               </button>
             </div>
-            <pre className="bg-[#1e1e1e] p-3 rounded-md overflow-x-auto text-sm">
+            <pre className="p-3 overflow-x-auto text-sm">
               <code>{code}</code>
             </pre>
           </div>
         );
       }
-      return <ReactMarkdown key={index}>{part}</ReactMarkdown>;
+      return part.trim() ? <ReactMarkdown key={index}>{part}</ReactMarkdown> : null;
     });
   };
 
@@ -343,11 +372,12 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
       {/* Collapsed button when sidebar is closed */}
       {!isOpen && (
         <div 
-          className="fixed right-4 bottom-24 bg-[#1c2b4b] hover:bg-[#2d4a7c] text-white rounded-full p-3 shadow-lg cursor-pointer hover:shadow-xl transition-all duration-300 group z-20"
+          className="fixed right-4 bottom-24 bg-gradient-to-r from-indigo-600 to-purple-700 text-white rounded-full p-3.5 shadow-lg cursor-pointer hover:shadow-xl transition-all duration-300 hover:scale-105 group z-20"
           onClick={toggleSidebar}
         >
-          <div className="flex items-center justify-center">
-            Chat With Rohit's AI 🤖
+          <div className="flex items-center justify-center gap-2">
+            <Sparkles className="w-5 h-5" />
+            <span>Chat With Rohit's AI</span>
           </div>
         </div>
       )}
@@ -355,11 +385,11 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
       {/* Context Menu */}
       {showContextMenu && (
         <div 
-          className="fixed bg-[#252526] shadow-lg rounded-md z-50 border border-[#3c3c3c] py-1 w-48"
+          className={`fixed ${themeStyles.bg} shadow-lg rounded-md z-50 border ${themeStyles.border} py-1 w-48`}
           style={{ top: contextMenuPosition.y, left: contextMenuPosition.x }}
         >
           <button 
-            className="w-full text-left px-3 py-1.5 hover:bg-[#3c3c3c] flex items-center gap-2"
+            className={`w-full text-left px-3 py-1.5 ${themeStyles.hover} flex items-center gap-2`}
             onClick={() => {
               const message = messages.find(msg => msg.id === activeMessageId);
               if (message) handleCopy(message.content, message.id);
@@ -370,7 +400,17 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
             <span>Copy message</span>
           </button>
           <button 
-            className="w-full text-left px-3 py-1.5 hover:bg-[#3c3c3c] flex items-center gap-2"
+            className={`w-full text-left px-3 py-1.5 ${themeStyles.hover} flex items-center gap-2`}
+            onClick={() => {
+              if (activeMessageId) toggleSaveMessage(activeMessageId);
+              setShowContextMenu(false);
+            }}
+          >
+            <Bookmark size={14} />
+            <span>Save message</span>
+          </button>
+          <button 
+            className={`w-full text-left px-3 py-1.5 ${themeStyles.hover} flex items-center gap-2`}
             onClick={() => activeMessageId && deleteMessage(activeMessageId)}
           >
             <Trash size={14} />
@@ -381,180 +421,183 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
       
       {/* Main sidebar */}
       <div 
-        className={`my-6 fixed right-0 top-0 bottom-0 bg-[#1e1e1e] text-gray-200 shadow-xl transition-all duration-300 ease-in-out z-30 flex flex-col
-          ${isOpen ? 'w-96 border-l border-[#3c3c3c]' : 'w-0 opacity-0'}`}
+        className={`my-6 fixed right-0 top-0 bottom-0 ${themeStyles.sidebar} shadow-xl transition-all duration-300 ease-in-out z-30 flex flex-col
+          ${isOpen ? 'w-96 border-l ' + themeStyles.border : 'w-0 opacity-0'}`}
       >
         {isOpen && (
           <>
             {/* Header */}
-            <div className="p-4 border-b border-[#3c3c3c] flex items-center justify-between bg-[#252526]">
+            <div className={`p-4 border-b ${themeStyles.border} flex items-center justify-between ${themeStyles.header}`}>
               <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-blue-400" />
+                <div className="bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full p-1.5">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
                 <h3 className="font-semibold text-lg">Chat with Rohit's AI</h3>
                 {isInInlineMode && (
-                  <span className="text-xs bg-blue-600 text-white px-1.5 py-0.5 rounded">Inline</span>
+                  <span className="text-xs bg-indigo-600 text-white px-1.5 py-0.5 rounded">Inline</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
                 <button 
-                  className="p-1 hover:bg-[#3c3c3c] rounded"
+                  className={`p-1.5 ${themeStyles.hover} rounded-full`}
                   onClick={toggleInlineMode}
                   title={isInInlineMode ? "Switch to chat mode" : "Switch to inline mode"}
                 >
-                  <Split className={`w-4 h-4 ${isInInlineMode ? 'text-blue-400' : 'text-gray-400'}`} />
+                  <Split className={`w-4 h-4 ${isInInlineMode ? 'text-indigo-400' : ''}`} />
                 </button>
                 <button 
-                  className="p-1 hover:bg-[#3c3c3c] rounded"
+                  className={`p-1.5 ${themeStyles.hover} rounded-full`}
                   onClick={toggleSidebar}
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
             
             {/* Main content area */}
-            <div className="flex-1 overflow-hidden flex flex-col ">
+            <div className="flex-1 overflow-hidden flex flex-col">
               {/* Chat view */}
-              {activeView === 'chat' && (
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {messages.map((msg) => (
-                    <div 
-                      key={msg.id} 
-                      className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} ${msg.role === 'system' ? 'opacity-80' : ''}`}
-                      onContextMenu={(e) => handleContextMenu(e, msg.id)}
-                    >
-                      {/* Message header */}
-                      <div className="flex items-center gap-2 mb-1">
-                        {msg.role === 'assistant' ? (
-                          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-                            <Zap className="w-3.5 h-3.5" />
-                          </div>
-                        ) : msg.role === 'user' ? (
-                          userAvatar ? (
-                            <img src={userAvatar} alt={userName} className="w-6 h-6 rounded-full" />
-                          ) : (
-                            <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
-                              <span className="text-xs font-semibold">{userName.charAt(0)}</span>
-                            </div>
-                          )
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {messages.map((msg) => (
+                  <div 
+                    key={msg.id} 
+                    className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} ${msg.role === 'system' ? 'opacity-80' : ''}`}
+                    onContextMenu={(e) => handleContextMenu(e, msg.id)}
+                  >
+                    {/* Message header */}
+                    <div className="flex items-center gap-2 mb-1">
+                      {msg.role === 'assistant' ? (
+                        <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                          <Zap className="w-3.5 h-3.5 text-white" />
+                        </div>
+                      ) : msg.role === 'user' ? (
+                        userAvatar ? (
+                          <img src={userAvatar} alt={userName} className="w-6 h-6 rounded-full border-2 border-blue-400" />
                         ) : (
-                          <div className="w-6 h-6 bg-gray-600 rounded-full flex items-center justify-center">
-                            <Lightbulb className="w-3.5 h-3.5" />
+                          <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-semibold text-white">{userName.charAt(0)}</span>
                           </div>
-                        )}
-                        <span className="text-xs text-gray-400">
-                          {msg.role === 'assistant' ? 'Rohit AI' : msg.role === 'user' ? userName : 'System'}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {formatTimestamp(msg.timestamp)}
-                        </span>
-                        {msg.status === 'sending' && (
-                          <span className="text-xs text-blue-400 animate-pulse">typing...</span>
-                        )}
+                        )
+                      ) : (
+                        <div className="w-6 h-6 bg-amber-600 rounded-full flex items-center justify-center">
+                          <Lightbulb className="w-3.5 h-3.5 text-white" />
+                        </div>
+                      )}
+                      <span className="text-xs text-gray-400">
+                        {msg.role === 'assistant' ? 'Rohit AI' : msg.role === 'user' ? userName : 'System'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {formatTimestamp(msg.timestamp)}
+                      </span>
+                      {msg.status === 'sending' && (
+                        <span className="text-xs text-blue-400 animate-pulse">typing...</span>
+                      )}
+                      {msg.saved && (
+                        <Bookmark size={12} className="text-blue-400" />
+                      )}
+                    </div>
+                    
+                    {/* Message content */}
+                    <div 
+                      className={`p-3 rounded-lg relative group max-w-[90%] ${
+                        msg.role === 'user'
+                          ? themeStyles.userMessage + ' rounded-tr-none'
+                          : msg.role === 'system'
+                          ? themeStyles.systemMessage
+                          : themeStyles.assistantMessage + ' rounded-tl-none'
+                      }`}
+                    >
+                      <div className="whitespace-pre-wrap">
+                        {formatMessageContent(msg.content)}
                       </div>
                       
-                      {/* Message content */}
-                      <div 
-                        className={`p-3 rounded-lg relative group max-w-[90%] ${
-                          msg.role === 'user'
-                            ? 'bg-[#2c2c7c] rounded-tr-none'
-                            : msg.role === 'system'
-                            ? 'bg-[#333333]'
-                            : 'bg-[#2d2d2d] rounded-tl-none'
-                        }`}
-                      >
-                        <div className="whitespace-pre-wrap prose prose-invert prose-sm max-w-none">
-                          {formatMessageContent(msg.content)}
-                        </div>
-                        
-                        {/* Actions for assistant messages */}
-                        {msg.role === 'assistant' && (
-                          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                            <button 
-                              className="p-1 hover:bg-[#3c3c3c] rounded"
-                              onClick={() => handleCopy(msg.content, msg.id)}
-                            >
-                              {copiedMessageId === msg.id ? (
-                                <Check className="w-3.5 h-3.5 text-green-500" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                          </div>
-                        )}
+                      {/* Actions for messages */}
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                        <button 
+                          className={`p-1 ${themeStyles.hover} rounded`}
+                          onClick={() => handleCopy(msg.content, msg.id)}
+                        >
+                          {copiedMessageId === msg.id ? (
+                            <Check className="w-3.5 h-3.5 text-green-500" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        <button 
+                          className={`p-1 ${themeStyles.hover} rounded`}
+                          onClick={() => toggleSaveMessage(msg.id)}
+                        >
+                          <Bookmark className={`w-3.5 h-3.5 ${msg.saved ? 'text-blue-400' : ''}`} />
+                        </button>
                       </div>
                     </div>
-                  ))}
-                  
-                  {/* Typing indicator */}
-                  {isTyping && (
-                    <div className="flex items-start gap-2">
-                      <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
-                        <Zap className="w-3.5 h-3.5" />
-                      </div>
-                      <div className="p-3 rounded-lg bg-[#2d2d2d] flex items-center gap-1">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                      </div>
+                  </div>
+                ))}
+                
+                {/* Typing indicator */}
+                {isTyping && (
+                  <div className="flex items-start gap-2">
+                    <div className="w-6 h-6 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                      <Zap className="w-3.5 h-3.5 text-white" />
                     </div>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-              )}
+                    <div className="p-3 rounded-lg bg-[#2d2d2d] flex items-center gap-1.5">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
             </div>
             
-            {/* Quick suggestions area (shown only in chat view) */}
-            {activeView === 'chat' && (
-              <div className="p-3 bg-[#252526] border-t border-[#3c3c3c]">
-              
-                
-                <div className="mt-2">
-                  <h4 className="text-xs font-medium text-gray-400 mb-2">QUICK START</h4>
-                  <div className="space-y-1">
-                    {quickStarters.map((starter, index) => (
-                      <button
-                        key={index}
-                        className="w-full text-left text-xs p-1.5 hover:bg-[#3c3c3c] rounded flex items-center gap-1 text-gray-300"
-                        onClick={() => handleQuickStarterClick(starter)}
-                      >
-                        <ChevronRight className="w-3 h-3 flex-shrink-0" />
-                        <span className="truncate">{starter}</span>
-                      </button>
-                    ))}
-                  </div>
+            {/* Updated Quick suggestions area - hidden after first message */}
+            {!hideQuickStart && (
+              <div className="p-4 bg-gradient-to-b from-[#252526] to-[#1e1e1e] border-t border-[#3c3c3c]">
+                <h4 className="text-xs font-medium text-gray-400 mb-3">SUGGESTED PROMPTS</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {quickStarters.map((starter, index) => (
+                    <button
+                      key={index}
+                      className="text-left text-xs p-2 bg-[#2d2d2d] hover:bg-[#3c3c3c] border border-[#444] rounded-md flex items-center gap-2 text-gray-300 transition-colors"
+                      onClick={() => handleQuickStarterClick(starter.text)}
+                    >
+                      <div className="p-1 rounded-full bg-[#3c3c3c] flex-shrink-0">
+                        {starter.icon}
+                      </div>
+                      <span className="truncate">{starter.text}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
             
             {/* Input area */}
-            {activeView === 'chat' && (
-              <div className="p-3 bg-[#1e1e1e] border-t border-[#3c3c3c]">
-                <form onSubmit={handleSubmit} className="relative">
-                  <textarea 
-                    ref={textareaRef}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    className="w-full bg-[#2d2d2d] border border-[#3c3c3c] rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:border-[#525252] focus:ring-1 focus:ring-[#525252] resize-none"
-                    placeholder="Ask Rohit something..."
-                    style={{ height: textareaHeight }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmit(e);
-                      }
-                    }}
-                  />
-                  <button 
-                    type="submit" 
-                    className={`absolute right-3 bottom-3 p-1 rounded-md ${message.trim() ? 'text-blue-400 hover:text-blue-300' : 'text-gray-500 cursor-not-allowed'}`}
-                    disabled={!message.trim()}
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
-              </div>
-            )}
+            <div className="p-3 bg-[#1e1e1e] border-t border-[#3c3c3c]">
+              <form onSubmit={handleSubmit} className="relative">
+                <textarea 
+                  ref={textareaRef}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  className={`w-full ${themeStyles.input} rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none`}
+                  placeholder="Ask Rohit something..."
+                  style={{ height: textareaHeight }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSubmit(e);
+                    }
+                  }}
+                />
+                <button 
+                  type="submit" 
+                  className={`absolute right-3 bottom-3 p-1 rounded-md transition-colors ${message.trim() ? 'text-indigo-400 hover:text-indigo-300' : 'text-gray-500 cursor-not-allowed'}`}
+                  disabled={!message.trim()}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
           </>
         )}
       </div>

@@ -189,7 +189,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ showToast }) => {
               </button>
               
               <a 
-                href="https://rohityadav.dev" 
+                href="https://drive.google.com/file/d/196xuGCpFDLTosfbUKZIWb2qgP-XjudAA/view?usp=sharing" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="flex items-center justify-between bg-[#1e1e1e] hover:bg-[#252525] border border-[#333333] hover:border-cyan-700/30 p-4 rounded-xl transition-all group hover:shadow-xl hover:shadow-cyan-900/10 md:col-span-2"
@@ -202,7 +202,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ showToast }) => {
                     <div className="text-sm text-gray-400">Resume</div>
                     <div className="flex items-center text-white font-medium">
                       <a 
-                        href="src\types\Rohit_Yadav_Resume_Updated.pdf" 
+                        href="https://drive.google.com/file/d/196xuGCpFDLTosfbUKZIWb2qgP-XjudAA/view?usp=sharing" 
                         download 
                         className="flex items-center text-cyan-400 hover:text-cyan-300 transition-colors"
                       >
