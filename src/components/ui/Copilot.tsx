@@ -80,7 +80,7 @@ const CopilotSidebar: React.FC<CopilotSidebarProps> = ({
 • Full-stack development with React, TypeScript, and Node.js
 • Machine learning and AI systems
 • Cloud architecture on AWS and GCP
-• Mobile app development with React Native
+• Mobile app development with Flutter 
 
 You can ask me anything about Rohit's experience, skills, or projects, and I'll help you learn more about his background and expertise.`,
       timestamp: new Date(Date.now() - 1000 * 60 * 5),

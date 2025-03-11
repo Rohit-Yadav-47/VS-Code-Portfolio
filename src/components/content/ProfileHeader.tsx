@@ -166,7 +166,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ showToast }) => {
                   </div>
                   <div>
                     <div className="text-sm text-gray-400">Email</div>
-                    <div className="text-white font-medium">yrohit1805 @gmail.com</div>
+                    <div className="text-white font-medium">yrohit1805@gmail.com</div>
                   </div>
                 </div>
                 <ClipboardCheck className={`w-4 h-4 ${animateEmail ? 'text-green-400' : 'text-gray-500'} group-hover:text-white transition-colors`} />
