@@ -21,7 +21,7 @@ import AchievementsSection from './components/content/AchievementsSection';
 import ResearchSection from './components/content/ResearchSection';
 import TerminalSection from './components/content/TerminalSection';
 import Notification from './components/ui/Notification';
-import Minimap from './components/ui/Copilot';
+import Copilot from './components/ui/Copilot';
 
 // Data imports
 import { 
@@ -298,19 +298,23 @@ function App() {
                   )}
                 </div>
               </div>
+              
             </div>
+                    {/* Terminal Section - only show on desktop */}
+        {!isMobile && (
+          <TerminalSection />
+        )}
           </div>
 
           {/* Minimap overlay - only show on desktop */}
           {showMinimap && !isMobile && (
-            <Minimap />
+            <Copilot />
           )}
+                  {/* Terminal Section - only show on desktop */}
+
         </div>
 
-        {/* Terminal Section - only show on desktop */}
-        {!isMobile && (
-          <TerminalSection />
-        )}
+
       </div>
 
       {/* Status Bar - adjust z-index to be above terminal and scaled for mobile */}
