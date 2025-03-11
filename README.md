@@ -2,7 +2,7 @@
 
 An innovative portfolio website that replicates the Visual Studio Code interface while incorporating advanced AI features for interactive user engagement. Built with React, TypeScript, and Google's Gemini AI.
 
-![image](https://github.com/user-attachments/assets/013d1641-2580-4090-953e-25fc1187d1e3)
+![screenshot (4)](https://github.com/user-attachments/assets/1569a642-e9f2-49c3-91fb-275912fbff9b)
 
 
 ## 🌟 Key Features
