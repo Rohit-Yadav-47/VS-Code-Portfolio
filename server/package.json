@@ -1,0 +1,13 @@
+{
+  "name": "terminal-server",
+  "version": "1.0.0",
+  "description": "WebSocket server for xterm.js terminal connections",
+  "main": "terminalServer.js",
+  "scripts": {
+    "start": "node terminalServer.js"
+  },
+  "dependencies": {
+    "@lydell/node-pty": "^1.1.0",
+    "ws": "^8.13.0"
+  }
+}

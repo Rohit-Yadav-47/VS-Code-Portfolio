@@ -1,284 +1,691 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Terminal, ClipboardCopy, Check, Maximize2, Minimize2, RefreshCw} from 'lucide-react';
+import { Terminal as TerminalIcon, ClipboardCopy, Check, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
+import { Terminal } from 'xterm';
+import { FitAddon } from 'xterm-addon-fit';
+import { WebLinksAddon } from 'xterm-addon-web-links';
+import 'xterm/css/xterm.css';
 
-// Essential resume data
-const resumeData = {
-  personal: {
-    name: "Rohit Yadav",
-    role: "Software Engineer",
-    location: "Bangalore, India"
-  },
-  experience: [
-    {
-      company: "AMADEUS",
-      position: "Software Development Engineer Intern",
-      highlight: "Developed browser extension with LLM pipeline, improving feedback processing by 65%"
-    },
-    {
-      company: "TECHCURATORS",
-      position: "Technical Project Associate Intern",
-      highlight: "Built RAG framework with 85% improved retrieval accuracy serving 200+ daily users"
-    }
-  ],
-  projects: [
-    "Smart Wheelchair: Multimodal accessibility system with TensorFlow & React",
-    "Event Hub: Microservice architecture with sub-50ms RAG query latency"
-  ],
-  achievements: [
-    "IEEEXtreme: Top 20 nationally from 17,000+ participants",
-    "Hackathon Wins: Led teams to 10+ top finishes"
-  ],
-  skills: {
-    "Core": ["Python", "React", "AWS", "TensorFlow", "FastAPI"],
-    "Advanced": ["RAG", "LLM", "Kubernetes", "CI/CD"]
-  }
-};
+// For WebSocket terminal connections
+interface TerminalMessage {
+  type: 'output' | 'error' | 'info' | 'system' | 'pong';
+  data?: string;
+  timestamp?: number;
+}
 
 const TerminalSection: React.FC = () => {
   const [isMinimized, setIsMinimized] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
-  const [terminalCommand, setTerminalCommand] = useState("");
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [cursorVisible, setCursorVisible] = useState(true);
-  const [output, setOutput] = useState<JSX.Element | null>(null);
+  const [connected, setConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [availableCommands] = useState([
-    'help', 'skills', 'exp', 'projects', 'achievements', 'clear', 'about', 'neofetch'
-  ]);
+  const [currentDirectory, setCurrentDirectory] = useState("~");
+  const [username, setUsername] = useState("user");
+  const [hostname, setHostname] = useState("localhost");
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const [lastPingTime, setLastPingTime] = useState<number | null>(null);
   
-  const inputRef = useRef<HTMLInputElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<Terminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const connectionCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const maxReconnectAttemptsRef = useRef<number>(10); // Limit reconnect attempts
+  const isUnmountingRef = useRef<boolean>(false);
   
-  // Terminal focus handling
+  // Get WebSocket URL from environment or use default with fallbacks
+  const getWebSocketUrl = () => {
+    // Try to get from environment, fallback to window.location based URL, then localhost
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    
+    // Use environment variable if available (e.g., set by build process)
+    if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_TERMINAL_WS_URL) {
+      return process.env.REACT_APP_TERMINAL_WS_URL;
+    }
+    
+    // Fallback to same host as app but different port if in development
+    if (process.env.NODE_ENV === 'development') {
+      return 'ws://localhost:4000';
+    }
+    
+    // In production, assume the terminal service is on the same domain with path
+    return `${protocol}//${host}/api/terminal`;
+  };
+  
+  // Initialize xterm.js
   useEffect(() => {
-    const handleClick = () => {
-      if (inputRef.current) {
-        inputRef.current.focus();
+    if (!terminalRef.current) return;
+    
+    // Create and configure xterm
+    const term = new Terminal({
+      cursorBlink: true,
+      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontSize: 14,
+      theme: {
+        background: '#1e1e1e',
+        foreground: '#eeeeee',
+        cursor: '#ffffff',
+        selection: '#5DA5D533',
+        black: '#2e3436',
+        red: '#cc0000',
+        green: '#4e9a06',
+        yellow: '#c4a000',
+        blue: '#3465a4',
+        magenta: '#75507b',
+        cyan: '#06989a',
+        white: '#d3d7cf',
+        brightBlack: '#555753',
+        brightRed: '#ef2929',
+        brightGreen: '#8ae234',
+        brightYellow: '#fce94f',
+        brightBlue: '#729fcf',
+        brightMagenta: '#ad7fa8',
+        brightCyan: '#34e2e2',
+        brightWhite: '#eeeeec'
+      },
+      scrollback: 1000,
+      allowTransparency: true
+    });
+    
+    // Add the fit addon
+    const fitAddon = new FitAddon();
+    term.loadAddon(fitAddon);
+    fitAddonRef.current = fitAddon;
+    
+    // Add web links addon
+    term.loadAddon(new WebLinksAddon());
+    
+    // Open the terminal in the container
+    term.open(terminalRef.current);
+    xtermRef.current = term;
+    
+    // Handle terminal input
+    term.onData(data => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'input', data }));
+      }
+    });
+    
+    // Handle terminal resize events with debouncing
+    let resizeTimeout: NodeJS.Timeout;
+    const handleTermResize = (size: { cols: number; rows: number }) => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'resize',
+            cols: size.cols,
+            rows: size.rows
+          }));
+        }
+      }, 100); // Debounce resize events
+    };
+    
+    term.onResize(handleTermResize);
+    
+    // Initial terminal welcome message
+    term.writeln("\x1b[1;34mWelcome to the Web Terminal\x1b[0m");
+    term.writeln("\x1b[90mConnecting to server...\x1b[0m");
+    
+    // Auto-fit terminal to container
+    if (fitAddonRef.current) {
+      setTimeout(() => {
+        try {
+          fitAddonRef.current?.fit();
+          // Send initial size to server
+          if (wsRef.current && 
+              wsRef.current.readyState === WebSocket.OPEN && 
+              term.rows && 
+              term.cols) {
+            wsRef.current.send(JSON.stringify({
+              type: 'resize',
+              cols: term.cols,
+              rows: term.rows
+            }));
+          }
+        } catch (error) {
+          console.error('Error during initial fit:', error);
+        }
+      }, 100);
+    }
+    
+    // Handle resize events
+    const handleResize = () => {
+      if (fitAddonRef.current && !isMinimized) {
+        try {
+          fitAddonRef.current.fit();
+          // Don't need to manually call handleTermResize here as xterm's onResize will be triggered
+        } catch (error) {
+          console.error('Error during window resize:', error);
+        }
       }
     };
     
-    const terminal = terminalRef.current;
-    if (terminal) {
-      terminal.addEventListener('click', handleClick);
+    window.addEventListener('resize', handleResize);
+    
+    // Clean up
+    return () => {
+      isUnmountingRef.current = true;
+      window.removeEventListener('resize', handleResize);
+      try {
+        term.dispose();
+      } catch (error) {
+        console.error('Error disposing terminal:', error);
+      }
+    };
+  }, [isMinimized]);
+  
+  // Re-fit terminal after minimized state changes
+  useEffect(() => {
+    if (!isMinimized && fitAddonRef.current && xtermRef.current) {
+      setTimeout(() => {
+        try {
+          fitAddonRef.current?.fit();
+          
+          // Re-send terminal size after maximizing
+          if (wsRef.current && 
+              wsRef.current.readyState === WebSocket.OPEN && 
+              xtermRef.current?.rows && 
+              xtermRef.current?.cols) {
+            wsRef.current.send(JSON.stringify({
+              type: 'resize',
+              cols: xtermRef.current.cols,
+              rows: xtermRef.current.rows
+            }));
+          }
+        } catch (error) {
+          console.error('Error during fit after minimize state change:', error);
+        }
+      }, 300); // Wait for animation to complete
     }
+  }, [isMinimized]);
+  
+  // Health check for WebSocket connection with more tolerance
+  useEffect(() => {
+    const checkConnectionHealth = () => {
+      // Only check if we think we're connected
+      if (connected && wsRef.current) {
+        // If we haven't received a ping response in 45 seconds (more tolerance)
+        if (lastPingTime && Date.now() - lastPingTime > 45000) {
+          console.warn('Connection health check failed - no recent pings');
+          
+          // Check actual WebSocket state
+          if (wsRef.current.readyState !== WebSocket.OPEN) {
+            console.warn('WebSocket is not in OPEN state:', wsRef.current.readyState);
+            
+            // Force reconnection
+            try {
+              wsRef.current.close();
+            } catch (e) {
+              console.error('Error closing stale connection:', e);
+            }
+            
+            // Reset state
+            setConnected(false);
+            setIsLoading(true);
+            
+            // Update UI
+            if (xtermRef.current) {
+              xtermRef.current.writeln("\x1b[1;31mConnection health check failed, reconnecting...\x1b[0m");
+            }
+          } else {
+            // WebSocket is open but we're not getting pings
+            // Send a test ping to verify connection
+            try {
+              wsRef.current.send(JSON.stringify({ 
+                type: 'ping',
+                timestamp: Date.now() 
+              }));
+              console.log('Test ping sent during health check');
+            } catch (e) {
+              console.error('Error sending test ping - connection likely dead:', e);
+              
+              // Force close and reconnect
+              try {
+                wsRef.current.close();
+              } catch (innerE) {
+                console.error('Error closing broken connection:', innerE);
+              }
+              
+              setConnected(false);
+              setIsLoading(true);
+              
+              if (xtermRef.current) {
+                xtermRef.current.writeln("\x1b[1;31mConnection test failed, reconnecting...\x1b[0m");
+              }
+            }
+          }
+        }
+      }
+    };
+    
+    // Check connection health less frequently (15 seconds instead of 10)
+    const healthInterval = setInterval(checkConnectionHealth, 15000);
+    connectionCheckIntervalRef.current = healthInterval;
     
     return () => {
-      if (terminal) {
-        terminal.removeEventListener('click', handleClick);
+      clearInterval(healthInterval);
+    };
+  }, [connected, lastPingTime]);
+  
+  // Initialize WebSocket connection to terminal server with better error handling
+  useEffect(() => {
+    const connectToTerminal = () => {
+      if (isUnmountingRef.current) return;
+      
+      // Use our dynamic WebSocket URL getter function
+      const socketUrl = getWebSocketUrl();
+      
+      try {
+        // Clear any existing timeouts and intervals
+        if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+        
+        // Close existing connection if any
+        if (wsRef.current) {
+          try {
+            if (wsRef.current.readyState === WebSocket.OPEN || 
+                wsRef.current.readyState === WebSocket.CONNECTING) {
+              wsRef.current.close();
+            }
+          } catch (error) {
+            console.error('Error closing existing WebSocket:', error);
+          }
+          wsRef.current = null;
+        }
+        
+        setIsLoading(true);
+        console.log('Connecting to terminal server at:', socketUrl);
+        
+        // Create new WebSocket connection
+        const socket = new WebSocket(socketUrl);
+        wsRef.current = socket;
+        
+        // Set connection timeout
+        const connectionTimeout = setTimeout(() => {
+          if (socket.readyState !== WebSocket.OPEN) {
+            console.warn('Connection attempt timed out');
+            socket.close();
+            // The close handler will handle reconnection
+          }
+        }, 10000); // 10 second connection timeout
+        
+        // Connection opened handler
+        socket.addEventListener('open', () => {
+          clearTimeout(connectionTimeout);
+          console.log('Connected to terminal server');
+          setConnected(true);
+          setIsLoading(false);
+          setReconnectAttempts(0); // Reset reconnect attempts on successful connection
+          setLastPingTime(Date.now()); // Initialize ping time
+          
+          if (xtermRef.current) {
+            xtermRef.current.writeln("\x1b[1;32mConnected to terminal server\x1b[0m");
+            
+            // Send initial terminal size
+            if (xtermRef.current.rows && xtermRef.current.cols) {
+              try {
+                socket.send(JSON.stringify({
+                  type: 'resize',
+                  cols: xtermRef.current.cols,
+                  rows: xtermRef.current.rows
+                }));
+              } catch (error) {
+                console.error('Error sending initial resize:', error);
+              }
+            }
+            
+            // Request initial system info
+            try {
+              socket.send(JSON.stringify({ type: 'system', command: 'info' }));
+            } catch (error) {
+              console.error('Error sending system info request:', error);
+            }
+          }
+        });
+        
+        // Set up keep-alive ping to prevent disconnections
+        // Use a more reliable ping interval of 15 seconds (instead of 5)
+        const pingInterval = setInterval(() => {
+          if (socket.readyState === WebSocket.OPEN) {
+            try {
+              socket.send(JSON.stringify({ 
+                type: 'ping',
+                timestamp: Date.now() 
+              }));
+              console.log('Ping sent to server');
+            } catch (e) {
+              console.error('Error sending ping:', e);
+              
+              // If we can't send a ping, the connection might be dead
+              // Let the health check handle reconnection
+            }
+          }
+        }, 15000); // 15 seconds ping interval
+        
+        pingIntervalRef.current = pingInterval;
+        
+        // Handle incoming messages from terminal with improved error handling
+        socket.addEventListener('message', (event) => {
+          try {
+            const message: TerminalMessage = JSON.parse(event.data);
+            
+            switch (message.type) {
+              case 'output':
+                if (xtermRef.current && message.data) {
+                  xtermRef.current.write(message.data);
+                }
+                setIsLoading(false);
+                break;
+                
+              case 'error':
+                if (xtermRef.current && message.data) {
+                  xtermRef.current.write(`\x1b[31m${message.data}\x1b[0m`);
+                }
+                setIsLoading(false);
+                break;
+                
+              case 'system':
+                // Handle system messages like current directory, username, etc.
+                try {
+                  if (message.data) {
+                    const systemData = JSON.parse(message.data);
+                    if (systemData.cwd) setCurrentDirectory(systemData.cwd);
+                    if (systemData.user) setUsername(systemData.user);
+                    if (systemData.hostname) setHostname(systemData.hostname);
+                  }
+                } catch (err) {
+                  console.error('Failed to parse system data:', err);
+                }
+                break;
+                
+              case 'info':
+                // Informational messages
+                if (xtermRef.current && message.data) {
+                  xtermRef.current.writeln(`\x1b[90m${message.data}\x1b[0m`);
+                }
+                break;
+                
+              case 'pong':
+                // Keep-alive response
+                console.log('Received pong from server');
+                setLastPingTime(Date.now());
+                break;
+                
+              case 'ping':
+                // Server initiated ping, respond with pong
+                if (socket.readyState === WebSocket.OPEN) {
+                  try {
+                    socket.send(JSON.stringify({ 
+                      type: 'pong',
+                      timestamp: message.timestamp
+                    }));
+                    console.log('Received ping from server, sent pong');
+                    setLastPingTime(Date.now());
+                  } catch (error) {
+                    console.error('Error sending pong response:', error);
+                  }
+                }
+                break;
+                
+              default:
+                console.warn('Unknown message type received:', message.type);
+            }
+          } catch (error) {
+            console.error('Failed to parse message from terminal server:', error, event.data);
+            if (xtermRef.current) {
+              xtermRef.current.writeln(`\x1b[31mError: Failed to parse server message\x1b[0m`);
+            }
+          }
+        });
+        
+        // Handle connection closure with smarter reconnect logic
+        socket.addEventListener('close', (event) => {
+          clearTimeout(connectionTimeout);
+          
+          console.log(`WebSocket closed with code: ${event.code}, reason: ${event.reason || 'No reason provided'}`);
+          setConnected(false);
+          setIsLoading(false);
+          
+          // Clear ping interval
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+            pingIntervalRef.current = null;
+          }
+          
+          if (isUnmountingRef.current) {
+            console.log('Component unmounting, not attempting reconnection');
+            return;
+          }
+          
+          if (xtermRef.current) {
+            xtermRef.current.writeln("\x1b[1;31mDisconnected from terminal server\x1b[0m");
+            
+            // Don't retry indefinitely
+            if (reconnectAttempts >= maxReconnectAttemptsRef.current) {
+              xtermRef.current.writeln(`\x1b[1;31mMaximum reconnection attempts (${maxReconnectAttemptsRef.current}) reached. Please refresh the page.\x1b[0m`);
+              return;
+            }
+            
+            // Progressive backoff for reconnection attempts, with a cap
+            // Start with 1s, then 2s, 4s, 8s, etc. up to 30s max
+            const nextAttempt = Math.min(30, Math.pow(2, reconnectAttempts));
+            xtermRef.current.writeln(`\x1b[90mReconnecting in ${nextAttempt} seconds (attempt ${reconnectAttempts + 1})...\x1b[0m`);
+            
+            // Update reconnect attempts
+            setReconnectAttempts(prev => prev + 1);
+            
+            // Attempt to reconnect with progressive backoff
+            const timeout = setTimeout(() => {
+              if (!isUnmountingRef.current) {
+                connectToTerminal();
+              }
+            }, nextAttempt * 1000);
+            
+            reconnectTimeoutRef.current = timeout;
+          }
+        });
+        
+        // Handle connection errors
+        socket.addEventListener('error', (error) => {
+          console.error('Terminal WebSocket error:', error);
+          // Do not set isLoading false here, let the close handler deal with it
+          if (xtermRef.current) {
+            xtermRef.current.writeln(`\x1b[1;31mConnection error. Details: ${error.toString()}\x1b[0m`);
+          }
+          // Don't attempt reconnect here - the close handler will do that
+        });
+      } catch (error) {
+        console.error('Failed to establish WebSocket connection:', error);
+        setIsLoading(false);
+        if (xtermRef.current) {
+          xtermRef.current.writeln("\x1b[1;31mFailed to connect to terminal server.\x1b[0m");
+          
+          // Check if we've reached the maximum number of attempts
+          if (reconnectAttempts >= maxReconnectAttemptsRef.current) {
+            xtermRef.current.writeln(`\x1b[1;31mMaximum reconnection attempts (${maxReconnectAttemptsRef.current}) reached. Please refresh the page.\x1b[0m`);
+            return;
+          }
+          
+          // Progressive backoff as before
+          const nextAttempt = Math.min(30, Math.pow(2, reconnectAttempts));
+          xtermRef.current.writeln(`\x1b[90mRetrying in ${nextAttempt} seconds (attempt ${reconnectAttempts + 1})...\x1b[0m`);
+        }
+        
+        // Update reconnect attempts
+        setReconnectAttempts(prev => prev + 1);
+        
+        // Try to reconnect with progressive backoff
+        if (!isUnmountingRef.current) {
+          const timeout = setTimeout(() => {
+            if (!isUnmountingRef.current) {
+              connectToTerminal();
+            }
+          }, nextAttempt * 1000);
+          
+          reconnectTimeoutRef.current = timeout;
+        }
+      }
+    };
+    
+    // Establish initial connection
+    setIsLoading(true);
+    connectToTerminal();
+    
+    // Cleanup on unmount
+    return () => {
+      isUnmountingRef.current = true;
+      
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch (error) {
+          console.error('Error closing WebSocket during cleanup:', error);
+        }
+      }
+      
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
+      
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      
+      if (connectionCheckIntervalRef.current) {
+        clearInterval(connectionCheckIntervalRef.current);
       }
     };
   }, []);
   
-  // Blinking cursor
+  // Add network status monitoring
   useEffect(() => {
-    const cursorInterval = setInterval(() => {
-      setCursorVisible(prev => !prev);
-    }, 530);
+    const handleOnline = () => {
+      console.log('Network connection restored');
+      if (xtermRef.current) {
+        xtermRef.current.writeln("\x1b[32mNetwork connection restored, attempting to reconnect...\x1b[0m");
+      }
+      
+      // Try to reconnect if we're not already connected
+      if (!connected && wsRef.current?.readyState !== WebSocket.OPEN) {
+        // Reset reconnect attempts when network comes back online
+        setReconnectAttempts(0);
+        
+        // Clear any pending reconnect timeout
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+          reconnectTimeoutRef.current = null;
+        }
+        
+        // Reconnect after a short delay to ensure network is stable
+        reconnectTimeoutRef.current = setTimeout(() => {
+          if (wsRef.current?.readyState !== WebSocket.OPEN && !isUnmountingRef.current) {
+            // Close existing socket if any
+            if (wsRef.current) {
+              try {
+                wsRef.current.close();
+              } catch (error) {
+                console.error('Error closing socket during network recovery:', error);
+              }
+            }
+            
+            // Connect to terminal server
+            setIsLoading(true);
+            
+            // Clear any existing connection check interval
+            if (connectionCheckIntervalRef.current) {
+              clearInterval(connectionCheckIntervalRef.current);
+              connectionCheckIntervalRef.current = null;
+            }
+            
+            // Connect to terminal server (reuse existing function)
+            if (!isUnmountingRef.current) {
+              // Get the connectToTerminal function
+              const event = new Event('reconnect-terminal');
+              window.dispatchEvent(event);
+            }
+          }
+        }, 1000);
+      }
+    };
     
-    return () => clearInterval(cursorInterval);
-  }, []);
-
-  // Auto scroll to bottom on new content
-  useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [commandHistory, output]);
-
-  
+    const handleOffline = () => {
+      console.log('Network connection lost');
+      if (xtermRef.current) {
+        xtermRef.current.writeln("\x1b[31mNetwork connection lost. Waiting for connection to restore...\x1b[0m");
+      }
+      
+      // Update UI to show disconnected state
+      setConnected(false);
+      setIsLoading(false);
+    };
+    
+    // Listen for reconnect-terminal events (custom event to trigger reconnection)
+    const handleReconnectTerminal = () => {
+      // Force reconnection by closing the WebSocket
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch (error) {
+          console.error('Error closing socket during forced reconnection:', error);
+        }
+      }
+      
+      // Reset reconnect attempts for a fresh start
+      setReconnectAttempts(0);
+      
+      // Connect to terminal server
+      setIsLoading(true);
+      
+      // Clear any existing connection check interval
+      if (connectionCheckIntervalRef.current) {
+        clearInterval(connectionCheckIntervalRef.current);
+        connectionCheckIntervalRef.current = null;
+      }
+      
+      // Trigger the effect that contains connectToTerminal
+      setIsLoading(prev => {
+        // This is a trick to re-trigger the connection effect
+        setTimeout(() => setIsLoading(true), 0);
+        return false;
+      });
+    };
+    
+    // Register event listeners
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('reconnect-terminal', handleReconnectTerminal);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('reconnect-terminal', handleReconnectTerminal);
+    };
+  }, [connected]);
 
   const copyToClipboard = () => {
-    const textToCopy = Object.entries(resumeData.skills)
-      .map(([category, skills]) => `${category}: ${skills.join(', ')}`)
-      .join('\n');
-      
-    navigator.clipboard.writeText(textToCopy);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
-  };
-  
-  const processCommand = (command: string) => {
-    setIsLoading(true);
-    
-    setTimeout(() => {
-      setIsLoading(false);
-      
-      if (command.trim().toLowerCase() === 'clear' || command.trim().toLowerCase() === 'cls') {
-        setCommandHistory([]);
-        setOutput(null);
-        return;
-      }
-      
-      // Skill command
-      if (command.trim().toLowerCase() === 'skills') {
-        setOutput(
-          <div className="ml-4 mt-2 space-y-1 text-gray-300 animate-fadeIn">
-            {Object.entries(resumeData.skills).map(([category, skills], index) => (
-              <p key={index} className="group flex items-start hover:text-white transition-colors">
-                <span className="text-yellow-500 mr-2 group-hover:text-yellow-300 transition-colors">$</span>
-                <span className="font-medium text-blue-400">{category}:</span>
-                <span className="ml-1 text-blue-300">{Array.isArray(skills) ? skills.join(', ') : skills}</span>
-              </p>
-            ))}
-          </div>
-        );
-      }
-      
-      // Experience command
-      else if (command.trim().toLowerCase() === 'exp' || command.trim().toLowerCase() === 'experience') {
-        setOutput(
-          <div className="ml-4 mt-2 space-y-3 text-gray-300 animate-fadeIn">
-            {resumeData.experience.map((exp, index) => (
-              <div key={index} className="group hover:bg-gray-800 hover:bg-opacity-40 p-1 rounded transition-colors">
-                <p className="font-medium text-blue-400">{exp.company} <span className="text-green-400">| {exp.position}</span></p>
-                <p className="text-amber-300 text-sm mt-1">{exp.highlight}</p>
-              </div>
-            ))}
-          </div>
-        );
-      }
-      
-      // Projects command
-      else if (command.trim().toLowerCase() === 'projects') {
-        setOutput(
-          <div className="ml-4 mt-2 space-y-2 text-gray-300 animate-fadeIn">
-            {resumeData.projects.map((project, index) => (
-              <p key={index} className="group flex items-start hover:bg-gray-800 hover:bg-opacity-40 p-1 rounded transition-colors">
-                <span className="text-yellow-500 mr-2 group-hover:text-yellow-300 transition-colors">►</span>
-                <span className="text-blue-300">{project}</span>
-              </p>
-            ))}
-          </div>
-        );
-      }
-      
-      // Achievements command
-      else if (command.trim().toLowerCase() === 'achievements') {
-        setOutput(
-          <div className="ml-4 mt-2 space-y-2 text-gray-300 animate-fadeIn">
-            {resumeData.achievements.map((achievement, index) => (
-              <p key={index} className="group flex items-start hover:bg-gray-800 hover:bg-opacity-40 p-1 rounded transition-colors">
-                <span className="text-yellow-500 mr-2 group-hover:text-yellow-300 transition-colors">★</span>
-                <span className="text-blue-300">{achievement}</span>
-              </p>
-            ))}
-          </div>
-        );
-      }
-      
-      // Help command
-      else if (command.trim().toLowerCase() === 'help') {
-        setOutput(
-          <div className="ml-4 mt-2 space-y-2 text-gray-300 animate-fadeIn">
-            <p className="text-purple-400 font-medium mb-1">Available commands:</p>
-            <p><span className="text-amber-500 mr-2">$</span> <span className="text-blue-400 font-semibold">neofetch</span> - Display system info</p>
-            <p><span className="text-amber-500 mr-2">$</span> <span className="text-blue-400 font-semibold">skills</span> - List technical skills</p>
-            <p><span className="text-amber-500 mr-2">$</span> <span className="text-blue-400 font-semibold">exp</span> - Show work experience</p>
-            <p><span className="text-amber-500 mr-2">$</span> <span className="text-blue-400 font-semibold">projects</span> - View projects</p>
-            <p><span className="text-amber-500 mr-2">$</span> <span className="text-blue-400 font-semibold">achievements</span> - Display achievements</p>
-            <p><span className="text-amber-500 mr-2">$</span> <span className="text-blue-400 font-semibold">about</span> - About me</p>
-            <p><span className="text-amber-500 mr-2">$</span> <span className="text-blue-400 font-semibold">clear</span> - Clear terminal</p>
-          </div>
-        );
-      }
-      
-      // About command
-      else if (command.trim().toLowerCase() === 'about') {
-        setOutput(
-          <div className="ml-4 mt-2 space-y-1 text-gray-300 animate-fadeIn">
-            <p><span className="text-purple-400 font-semibold">Name:</span> {resumeData.personal.name}</p>
-            <p><span className="text-purple-400 font-semibold">Role:</span> {resumeData.personal.role}</p>
-            <p><span className="text-purple-400 font-semibold">Location:</span> {resumeData.personal.location}</p>
-            <p><span className="text-purple-400 font-semibold">Bio:</span> Full-stack engineer specialized in ML/AI solutions with a passion for building impactful systems.</p>
-          </div>
-        );
-      }
-      
-      // Neofetch command (system info display)
-      else if (command.trim().toLowerCase() === 'neofetch') {
-        setOutput(
-          <div className="flex items-start mt-2 animate-fadeIn">
-            <div className="text-indigo-400 font-mono mr-6 ml-2">
-              <pre className="text-blue-500">
-{`  ____       _     _ _   
- |  _ \\ ___ | |__ (_) |_ 
- | |_) / _ \\| '_ \\| | __|
- |  _ < (_) | | | | | |_ 
- |_| \\_\\___/|_| |_|_|\\__|`}
-              </pre>
-            </div>
-            <div className="flex flex-col text-gray-300 text-sm space-y-1">
-              <p><span className="text-indigo-400 mr-2">OS:</span> Portfolio v2.0.3</p>
-              <p><span className="text-purple-400 mr-2">Host:</span> {resumeData.personal.name}</p>
-              <p><span className="text-blue-400 mr-2">Kernel:</span> {resumeData.personal.role}</p>
-              <p><span className="text-indigo-400 mr-2">Uptime:</span> 3+ years in tech</p>
-              <p><span className="text-purple-400 mr-2">Packages:</span> {Object.values(resumeData.skills).flat().length} (skills)</p>
-              <p><span className="text-blue-400 mr-2">Shell:</span> TypeScript/React</p>
-              <p><span className="text-indigo-400 mr-2">Resolution:</span> Problem-solver x Full-stack developer</p>
-              <p><span className="text-purple-400 mr-2">Terminal:</span> rxterm v1.0</p>
-              <p><span className="text-blue-400 mr-2">CPU:</span> Brain @ 4.2GHz</p>
-              <p><span className="text-indigo-400 mr-2">Memory:</span> 1000+ DSA problems solved</p>
-            </div>
-          </div>
-        );
-      }
-      
-      // Command not found
-      else {
-        setOutput(
-          <div className="animate-fadeIn">
-            <p className="text-red-500">Command not found: {command}</p>
-            <p className="text-gray-500 text-xs mt-1">Type 'help' to see available commands</p>
-            <div className="text-xs text-red-400 mt-2 font-mono animate-pulse">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="flex">
-                  <span className="text-gray-600 mr-2">{i+1}</span>
-                  <span>{`${i === 0 ? 'ERROR' : 'UNKNOWN_COMMAND'}`}: {Math.random().toString(36).substring(2, 5)}_{command}_{Math.random().toString(36).substring(2, 5)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      }
-    }, 300);
-  };
-  
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      const command = terminalCommand.trim();
-      if (command) {
-        setCommandHistory(prev => [...prev, command]);
-        setTerminalCommand("");
-        setHistoryIndex(-1);
-        processCommand(command);
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (commandHistory.length > 0) {
-        const newIndex = historyIndex < commandHistory.length - 1 ? historyIndex + 1 : historyIndex;
-        setHistoryIndex(newIndex);
-        setTerminalCommand(commandHistory[commandHistory.length - 1 - newIndex]);
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (historyIndex > 0) {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setTerminalCommand(commandHistory[commandHistory.length - 1 - newIndex]);
-      } else if (historyIndex === 0) {
-        setHistoryIndex(-1);
-        setTerminalCommand('');
-      }
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      const currentInput = terminalCommand.toLowerCase();
-      const matchedCommand = availableCommands.find(cmd => cmd.startsWith(currentInput));
-      if (matchedCommand) {
-        setTerminalCommand(matchedCommand);
+    if (xtermRef.current) {
+      const selection = xtermRef.current.getSelection();
+      if (selection) {
+        navigator.clipboard.writeText(selection)
+          .then(() => {
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+          })
+          .catch(err => {
+            console.error('Failed to copy: ', err);
+            if (xtermRef.current) {
+              xtermRef.current.writeln("\x1b[31mFailed to copy selection to clipboard\x1b[0m");
+            }
+          });
       }
     }
+  };
+  
+  const handleReconnectClick = () => {
+    // Manually trigger reconnection
+    window.dispatchEvent(new Event('reconnect-terminal'));
   };
 
   return (
@@ -288,12 +695,23 @@ const TerminalSection: React.FC = () => {
       {/* Terminal Header */}
       <div className="h-9 bg-[#252526] flex items-center justify-between px-3 border-b border-[#3c3c3c] rounded-t-md">
         <div className="flex items-center space-x-2">
-  
-          <Terminal className="w-4 h-4 text-gray-400" />
-          <span className="text-gray-300 font-medium text-sm">rohit@portfolio:~</span>
+          <TerminalIcon className="w-4 h-4 text-gray-400" />
+          <span className="text-gray-300 font-medium text-sm">
+            {username}@{hostname}:{currentDirectory}
+            {!connected && <span className="text-red-400 ml-2">(disconnected)</span>}
+          </span>
         </div>
         <div className="flex items-center space-x-3">
           {isLoading && <RefreshCw className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
+          {!connected && (
+            <button 
+              onClick={handleReconnectClick} 
+              className="hover:bg-[#4c4c4c] p-1 rounded transition-colors group"
+              aria-label="Force reconnect"
+            >
+              <RefreshCw className="w-3 h-3 text-gray-400 group-hover:text-gray-200 transition-colors" />
+            </button>
+          )}
           {!isCopied ? (
             <button 
               onClick={copyToClipboard} 
@@ -321,51 +739,11 @@ const TerminalSection: React.FC = () => {
       
       {/* Terminal Content */}
       {!isMinimized && (
-        <div 
-          ref={terminalRef}
-          className="h-[calc(100%-36px)] overflow-y-auto custom-scrollbar p-3 font-mono text-sm"
-          style={{ 
-            scrollbarWidth: 'thin', 
-            scrollbarColor: '#4c4c4c #1e1e1e', 
-            backgroundColor: '#1e1e1e'
-          }}
-        >
-          <div className="mb-3 text-gray-400 text-xs">
-            <span className="text-gray-300 font-semibold">Welcome to Portfolio Terminal v2.0.3</span><span className="text-gray-500"> | Type</span> <span className="text-gray-300">'help'</span> <span className="text-gray-500">for available commands.</span>
-            <div className="text-xs text-gray-600 mt-1">
-              • Use <span className="text-gray-400">Tab</span> to autocomplete • <span className="text-gray-400">↑/↓</span> arrows for history • <span className="text-gray-400">clear</span> to reset
-            </div>
-          </div>
-          
-          {/* Command history */}
-          {commandHistory.map((cmd, index) => (
-            <div key={index} className="mt-4 animate-fadeIn">
-              <p className="text-gray-300 flex items-center">
-                <span className="text-gray-400 mr-2">rohit@portfolio:~$</span> {cmd}
-              </p>
-              {index === commandHistory.length - 1 && output}
-            </div>
-          ))}
-          
-          {/* Interactive prompt */}
-          <div className="mt-4 flex items-center group">
-            <span className="text-gray-400 mr-2">rohit@portfolio:~$</span>
-            <div className="flex-grow flex items-center">
-              <input 
-                ref={inputRef}
-                type="text"
-                value={terminalCommand}
-                onChange={(e) => setTerminalCommand(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="bg-transparent border-none outline-none text-gray-300 flex-grow caret-transparent"
-                placeholder="Type a command..."
-                autoComplete="off"
-                spellCheck="false"
-              />
-              
-            </div>
-          </div>
-          <div ref={bottomRef} /> {/* Anchor for auto-scrolling */}
+        <div className="h-[calc(100%-36px)] overflow-hidden p-1 font-mono text-sm">
+          <div 
+            ref={terminalRef} 
+            className="w-full h-full" 
+          />
         </div>
       )}
     </div>

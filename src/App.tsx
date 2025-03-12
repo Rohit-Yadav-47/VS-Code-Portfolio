@@ -1,9 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Menu as MenuIcon,
-  ChevronRight,
-  Monitor,ChevronDown
-  ,FileCode,FolderOpen,Folder,Search,PlusCircle,MoreHorizontal,User,Briefcase,Code,GraduationCap,Trophy,BookOpen
+  FileCode, FolderOpen, Folder, Search, PlusCircle, 
+  Save, Download, ChevronDown, ChevronRight
 } from 'lucide-react';
 
 // Component imports
@@ -12,79 +10,842 @@ import ActivityBar from './components/layout/ActivityBar';
 import Explorer from './components/layout/Explorer';
 import EditorTabs from './components/layout/EditorTabs';
 import StatusBar from './components/layout/StatusBar';
-import EditorPills from './components/layout/EditorPills';
 import Breadcrumbs from './components/layout/Breadcrumbs';
-import ProfileHeader from './components/content/ProfileHeader';
-import ExperienceSection from './components/content/ExperienceSection';
-import ProjectsSection from './components/content/ProjectsSection';
-import EducationSection from './components/content/EducationSection';
-import AchievementsSection from './components/content/AchievementsSection';
-import ResearchSection from './components/content/ResearchSection';
+
 import TerminalSection from './components/content/TerminalSection';
 import Notification from './components/ui/Notification';
 import Copilot from './components/ui/Copilot';
+import CodeEditor from './components/content/CodeEditor';
 
-// Data imports
-import { 
-  experienceData, 
-  projectsData, 
-  educationData, 
-  achievementsData, 
-  researchData 
-} from './data';
+// Import path utilities
+import * as pathUtils from './utils/pathUtils';
+
+// File system types
+interface FileData {
+  name: string;
+  content: string;
+  language: string;
+  path: string;
+  lastSaved?: Date;
+  fileHandle?: FileSystemFileHandle;
+  isDirectory?: boolean;
+}
+
+// Constants
+const PYTHON_FOLDER_NAME = 'python';
 
 function App() {
-  const [activeSection, setActiveSection] = useState('about');
-  const [expandedItems, setExpandedItems] = useState<string[]>(['OPEN_EDITORS', 'ROHIT YADAV', 'SRC']);
-  const [activeTabs, setActiveTabs] = useState(['experience.js']);
+  const [activeSection, setActiveSection] = useState('main');
+  const [expandedItems, setExpandedItems] = useState<string[]>(['OPEN_EDITORS', 'PYTHON_FILES']);
+  const [activeTabs, setActiveTabs] = useState<string[]>(['main.py']);
   const [searchQuery, setSearchQuery] = useState('');
   const [animateContent, setAnimateContent] = useState(false);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [showMinimap, setShowMinimap] = useState(true);
   const [showLineNumbers, setShowLineNumbers] = useState(true);
-  const [activePill, setActivePill] = useState('overview');
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
-  const [warningCount, setWarningCount] = useState(2);
+  const [warningCount, setWarningCount] = useState(0);
   const [gitBranch, setGitBranch] = useState('main');
   const [showBreadcrumbs, setShowBreadcrumbs] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
-  const [showDesktopHint, setShowDesktopHint] = useState(true);
+  const [autoSave, setAutoSave] = useState(true);
+  const [hasFileSystemAccess, setHasFileSystemAccess] = useState(false);
+  const [currentDirectory, setCurrentDirectory] = useState<FileSystemDirectoryHandle | null>(null);
+  const [pythonFolderHandle, setPythonFolderHandle] = useState<FileSystemDirectoryHandle | null>(null);
   
-  // Check if device is mobile
-  useEffect(() => {
-    const checkIfMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      
-      // Show desktop hint for 5 seconds when on mobile
-      if (mobile) {
-        setShowDesktopHint(true);
-        setTimeout(() => setShowDesktopHint(false), 5000);
-      } else {
-        setShowDesktopHint(false);
-      }
-    };
-    
-    // Initial check
-    checkIfMobile();
-    
-    // Add event listener for resize
-    window.addEventListener('resize', checkIfMobile);
-    
-    // Cleanup
-    return () => window.removeEventListener('resize', checkIfMobile);
-  }, []);
+  const [files, setFiles] = useState<FileData[]>([
+    {
+      name: 'main.py',
+      content: '# Welcome to the Python editor\n\nprint("Hello, world!")',
+      language: 'python',
+      path: `/${PYTHON_FOLDER_NAME}/main.py`
+    }
+  ]);
+  
+  // Current active file - set to Python file
+  const [activeFile, setActiveFile] = useState('main.py');
   
   useEffect(() => {
     setAnimateContent(true);
     const timer = setTimeout(() => setAnimateContent(false), 300);
     return () => clearTimeout(timer);
-  }, [activeSection]);
+  }, [activeFile]);
 
+  // Check for File System Access API support
+  useEffect(() => {
+    const checkFileSystemSupport = () => {
+      if ('showDirectoryPicker' in window) {
+        setHasFileSystemAccess(true);
+      } else {
+        showToast("Your browser doesn't support the File System Access API");
+      }
+    };
+    
+    checkFileSystemSupport();
+  }, []);
 
+  // Function to ensure the Python folder exists
+  const ensurePythonFolder = async (directoryHandle: FileSystemDirectoryHandle): Promise<FileSystemDirectoryHandle> => {
+    try {
+      // Try to get the Python folder handle
+      try {
+        // @ts-ignore - TypeScript might not recognize the API
+        return await directoryHandle.getDirectoryHandle(PYTHON_FOLDER_NAME, { create: true });
+      } catch (err) {
+        console.error(`Failed to create ${PYTHON_FOLDER_NAME} folder:`, err);
+        showToast(`Failed to create ${PYTHON_FOLDER_NAME} folder. Using root directory instead.`);
+        return directoryHandle; // Fallback to root if we can't create the Python folder
+      }
+    } catch (err) {
+      console.error('Error in ensurePythonFolder:', err);
+      return directoryHandle; // Fallback to root
+    }
+  };
+
+  // Function to walk the file tree (similar to file.walk)
+  const walkDirectory = async (dirHandle: FileSystemDirectoryHandle, callback: (dirPath: string, dirs: string[], files: string[]) => void, currentPath: string = '/'): Promise<void> => {
+    const directories: string[] = [];
+    const files: string[] = [];
+
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind === 'directory') {
+        directories.push(entry.name);
+      } else if (entry.kind === 'file') {
+        files.push(entry.name);
+      }
+    }
+
+    callback(currentPath, directories, files);
+
+    for (const dirName of directories) {
+      try {
+        // @ts-ignore
+        const subDirHandle = await dirHandle.getDirectoryHandle(dirName);
+        await walkDirectory(subDirHandle, callback, `${currentPath}/${dirName}`);
+      } catch (err) {
+        console.error(`Error walking subdirectory ${dirName}:`, err);
+      }
+    }
+  };
+
+  // Function to create directories recursively (similar to file.mkdirs)
+  const createDirectories = async (dirHandle: FileSystemDirectoryHandle, path: string): Promise<FileSystemDirectoryHandle> => {
+    const pathParts = path.split('/').filter(Boolean);
+    let currentDir = dirHandle;
+
+    for (const dirName of pathParts) {
+      try {
+        // @ts-ignore
+        currentDir = await currentDir.getDirectoryHandle(dirName, { create: true });
+        console.log(`Created directory: ${dirName}`);
+      } catch (err) {
+        console.error(`Error creating directory ${dirName}:`, err);
+        throw err; // Re-throw to stop further directory creation
+      }
+    }
+
+    return currentDir;
+  };
+
+  // Function to open a directory picker
+  const openDirectory = async () => {
+    try {
+      if (!hasFileSystemAccess) {
+        showToast("Your browser doesn't support the File System Access API");
+        return;
+      }
+      
+      // @ts-ignore - TypeScript might not recognize the showDirectoryPicker API
+      const dirHandle = await window.showDirectoryPicker({
+        mode: 'readwrite',
+      });
+      
+      setCurrentDirectory(dirHandle);
+      showToast(`Opened directory: ${dirHandle.name}`);
+      
+      // Create or get the Python folder
+      try {
+        // @ts-ignore
+        const pythonFolder = await dirHandle.getDirectoryHandle(PYTHON_FOLDER_NAME, { create: true });
+        setPythonFolderHandle(pythonFolder);
+        showToast(`Using ${PYTHON_FOLDER_NAME} folder for Python files`);
+        
+        // Read files from the Python folder
+        const loadedFiles = await loadFilesFromPythonFolder(pythonFolder);
+        
+        if (loadedFiles.length > 0) {
+          setFiles(loadedFiles);
+          
+          // Find first actual file (not directory) to open by default
+          const firstFile = loadedFiles.find(file => !file.isDirectory);
+          if (firstFile) {
+            setActiveFile(firstFile.name);
+            setActiveTabs([firstFile.name]);
+          }
+          
+          showToast(`Loaded ${loadedFiles.filter(f => !f.isDirectory).length} Python files`);
+        } else {
+          // Create a default Python file if the folder is empty
+          const defaultFile = {
+            name: 'main.py',
+            content: '# Welcome to Python Editor\n\ndef main():\n    print("Hello, world!")\n\nif __name__ == "__main__":\n    main()',
+            language: 'python',
+            path: `/${PYTHON_FOLDER_NAME}/main.py`
+          };
+          
+          setFiles([defaultFile]);
+          setActiveFile('main.py');
+          setActiveTabs(['main.py']);
+          
+          // Save the default file to the filesystem
+          await saveFile(defaultFile);
+          showToast('Created default Python file');
+        }
+
+        // Example of using walkDirectory
+        if (pythonFolderHandle) {
+          await walkDirectory(pythonFolderHandle, (dirPath, dirs, files) => {
+            console.log(`Directory: ${dirPath}`);
+            console.log(`Subdirectories: ${dirs.join(', ')}`);
+            console.log(`Files: ${files.join(', ')}`);
+          });
+        }
+
+        // Example of using createDirectories
+        if (pythonFolderHandle) {
+          try {
+            await createDirectories(pythonFolderHandle, 'test/this/path');
+            showToast('Created directories test/this/path');
+          } catch (err) {
+            showToast(`Error creating directories: ${(err as Error).message}`);
+          }
+        }
+      } catch (err) {
+        console.error(`Error creating/accessing ${PYTHON_FOLDER_NAME} folder:`, err);
+        showToast(`Error: ${(err as Error).message}`);
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') { // Ignore if user canceled
+        console.error('Error opening directory:', err);
+        showToast(`Error opening directory: ${(err as Error).message}`);
+      }
+    }
+  };
+
+  // Function to load files from the Python folder only
+  const loadFilesFromPythonFolder = async (folderHandle: FileSystemDirectoryHandle) => {
+    try {
+      const newFiles: FileData[] = [];
+      const basePath = `/${PYTHON_FOLDER_NAME}`;
+      
+      // Iterate through all files in the Python folder
+      for await (const entry of folderHandle.values()) {
+        const entryPath = `${basePath}/${entry.name}`;
+        
+        if (entry.kind === 'file' && entry.name.endsWith('.py')) {
+          try {
+            const file = await entry.getFile();
+            const content = await file.text();
+            
+            newFiles.push({
+              name: entry.name,
+              content: content,
+              language: 'python',
+              path: entryPath,
+              lastSaved: new Date(file.lastModified),
+              fileHandle: entry
+            });
+          } catch (err) {
+            console.error(`Error reading file ${entry.name}:`, err);
+          }
+        } 
+        else if (entry.kind === 'directory') {
+          // Add the directory itself
+          newFiles.push({
+            name: entry.name,
+            content: '',
+            language: '',
+            path: entryPath,
+            isDirectory: true
+          });
+          
+          // Recursively load subdirectories
+          try {
+            const subDirFiles = await loadFilesFromSubdirectory(entry, entryPath);
+            newFiles.push(...subDirFiles);
+          } catch (err) {
+            console.error(`Error reading subdirectory ${entry.name}:`, err);
+          }
+        }
+      }
+      
+      return newFiles;
+    } catch (err) {
+      console.error('Error loading files:', err);
+      showToast(`Error loading files: ${(err as Error).message}`);
+      return [];
+    }
+  };
+  
+  // Function to load files from subdirectories within the Python folder
+  const loadFilesFromSubdirectory = async (dirHandle: FileSystemDirectoryHandle, basePath: string) => {
+    try {
+      const files: FileData[] = [];
+      
+      for await (const entry of dirHandle.values()) {
+        const entryPath = `${basePath}/${entry.name}`;
+        
+        if (entry.kind === 'file' && entry.name.endsWith('.py')) {
+          try {
+            const file = await entry.getFile();
+            const content = await file.text();
+            
+            files.push({
+              name: entry.name,
+              content: content,
+              language: 'python',
+              path: entryPath,
+              lastSaved: new Date(file.lastModified),
+              fileHandle: entry
+            });
+          } catch (err) {
+            console.error(`Error reading file ${entry.name}:`, err);
+          }
+        } 
+        else if (entry.kind === 'directory') {
+          // Add the directory itself
+          files.push({
+            name: entry.name,
+            content: '',
+            language: '',
+            path: entryPath,
+            isDirectory: true
+          });
+          
+          // Recursively load subdirectories
+          try {
+            // @ts-ignore
+            const subDirHandle = await dirHandle.getDirectoryHandle(entry.name);
+            const subDirFiles = await loadFilesFromSubdirectory(subDirHandle, entryPath);
+            files.push(...subDirFiles);
+          } catch (err) {
+            console.error(`Error reading subdirectory ${entry.name}:`, err);
+          }
+        }
+      }
+      
+      return files;
+    } catch (err) {
+      console.error('Error loading files from subdirectory:', err);
+      return [];
+    }
+  };
+
+  // Function to save the current file
+  const saveFile = async (fileData: FileData) => {
+    try {
+      console.log('saveFile called for:', fileData.path);
+      
+      if (!pythonFolderHandle) {
+        showToast(`No ${PYTHON_FOLDER_NAME} folder available. Please open a directory first.`);
+        return false;
+      }
+      
+      if (!fileData.name.endsWith('.py')) {
+        showToast("Only Python files (.py) can be saved");
+        return false;
+      }
+      
+      // Use path utilities to get path components
+      const pathParts = pathUtils.splitPath(fileData.path);
+      const fileName = pathUtils.filename(fileData.path);
+      let currentDir = pythonFolderHandle;
+      
+      console.log('Path parts for save:', pathParts);
+      console.log('File name to save:', fileName);
+      
+      // Skip the first segment if it's the Python folder name
+      const startIndex = pathParts[0] === PYTHON_FOLDER_NAME ? 1 : 0;
+      
+      // Navigate to the correct subdirectory (if any)
+      for (let i = startIndex; i < pathParts.length - 1; i++) {
+        const segment = pathParts[i];
+        try {
+          console.log(`Accessing/creating directory for save: "${segment}"`);
+          // @ts-ignore
+          currentDir = await currentDir.getDirectoryHandle(segment, { create: true });
+          console.log(`Created/accessed directory for save: ${segment}`);
+        } catch (err) {
+          console.error(`Failed to create/access directory ${segment}:`, err);
+          showToast(`Error creating directory ${segment}: ${(err as Error).message}`);
+          return false;
+        }
+      }
+      
+      let fileHandle: FileSystemFileHandle;
+      
+      try {
+        if (fileData.fileHandle) {
+          // If we already have a handle, use it
+          fileHandle = fileData.fileHandle;
+          console.log('Using existing file handle');
+        } else {
+          console.log('Creating new file handle for:', fileName);
+          // @ts-ignore
+          fileHandle = await currentDir.getFileHandle(fileName, { create: true });
+          console.log('Created new file handle successfully');
+          
+          // Update the fileHandle in our state
+          setFiles(prevFiles => 
+            prevFiles.map(file => 
+              file.path === fileData.path ? { ...file, fileHandle } : file
+            )
+          );
+        }
+        
+        // Create a writable stream and write the content
+        console.log('Creating writable stream for file');
+        const writable = await fileHandle.createWritable();
+        console.log('Writing content to file');
+        await writable.write(fileData.content);
+        console.log('Closing writable stream');
+        await writable.close();
+        
+        // Update the lastSaved timestamp
+        const now = new Date();
+        setFiles(prevFiles => 
+          prevFiles.map(file => 
+            file.path === fileData.path ? { ...file, lastSaved: now, fileHandle } : file
+          )
+        );
+        
+        showToast(`File ${fileData.name} saved successfully`);
+        return true;
+      } catch (err) {
+        console.error('Error writing to file:', err);
+        showToast(`Error writing to file: ${(err as Error).message}`);
+        return false;
+      }
+    } catch (err) {
+      console.error('Error saving file:', err);
+      showToast(`Error saving file: ${(err as Error).message}`);
+      return false;
+    }
+  };
+
+  // Function to save all open files
+  const saveAllFiles = async () => {
+    let successCount = 0;
+    for (const file of files) {
+      if (!file.isDirectory && file.name.endsWith('.py')) {
+        const success = await saveFile(file);
+        if (success) successCount++;
+      }
+    }
+    
+    if (successCount > 0) {
+      showToast(`Saved ${successCount} Python files successfully`);
+    }
+  };
+
+  // Function to update file content
+  const updateFileContent = useCallback((fileName: string, newContent: string) => {
+    setFiles(prevFiles => 
+      prevFiles.map(file => 
+        file.name === fileName ? { ...file, content: newContent } : file
+      )
+    );
+    
+    // If auto-save is enabled and we have a real file handle, save after a short delay
+    if (autoSave) {
+      const fileData = files.find(f => f.name === fileName);
+      if (fileData && fileData.fileHandle && pythonFolderHandle) {
+        const debounceTimer = setTimeout(async () => {
+          await saveFile(fileData);
+        }, 1000); // 1-second debounce
+        
+        return () => clearTimeout(debounceTimer);
+      }
+    }
+  }, [files, autoSave, pythonFolderHandle]);
+
+  // Improved path joining function similar to file.path.join
+  const pathJoin = (base: string, path: string): string => {
+    if (!base) return path;
+    if (!path) return base;
+    
+    const baseEndsWithSlash = base.endsWith('/');
+    const pathStartsWithSlash = path.startsWith('/');
+    
+    if (baseEndsWithSlash && pathStartsWithSlash) {
+      return base + path.substring(1);
+    } else if (!baseEndsWithSlash && !pathStartsWithSlash) {
+      return `${base}/${path}`;
+    } else {
+      return base + path;
+    }
+  };
+
+  // Enhanced function to normalize paths
+  const normalizePath = (path: string): string => {
+    // Ensure path starts with a slash
+    const startWithSlash = path.startsWith('/') ? path : `/${path}`;
+    // Remove double slashes and trailing slash
+    return startWithSlash.replace(/\/+/g, '/').replace(/\/$/, '');
+  };
+
+  // Function to get relative path similar to file.path.relativePath
+  const getRelativePath = (rootPath: string, fullPath: string): string => {
+    const normalizedRoot = normalizePath(rootPath);
+    const normalizedFull = normalizePath(fullPath);
+    
+    if (normalizedFull.startsWith(normalizedRoot)) {
+      const relativePath = normalizedFull.substring(normalizedRoot.length);
+      return relativePath || '/';
+    }
+    
+    return fullPath; // If not a subpath, return original
+  };
+
+  // Enhanced function to create a new file at a specific path
+  const createNewFile = async (fileName: string, fileType: string = 'py', dirPath: string = '') => {
+    console.log('createNewFile called with:', { fileName, fileType, dirPath });
+    
+    // Only allow Python files
+    if (fileType !== 'py') {
+      showToast("Currently only Python files are supported");
+      fileType = 'py';
+    }
+    
+    // Generate appropriate file extension if not in the name
+    const fullFileName = fileName.includes('.') ? fileName : `${fileName}.${fileType}`;
+    
+    // Default content for Python files - more useful template
+    const defaultContent = `# ${fullFileName}
+# Created: ${new Date().toLocaleString()}
+
+def main():
+    print("Hello from ${fullFileName}")
+    
+    # Your code here
+    
+if __name__ == "__main__":
+    main()
+`;
+    
+    const language = 'python';
+    
+    // Normalize the paths using our path utilities
+    const pythonRoot = `/${PYTHON_FOLDER_NAME}`;
+    let filePath: string;
+    
+    if (dirPath) {
+      if (dirPath.startsWith(pythonRoot)) {
+        filePath = pathUtils.join(dirPath, fullFileName);
+      } else {
+        filePath = pathUtils.join(pythonRoot, pathUtils.join(dirPath, fullFileName));
+      }
+    } else {
+      filePath = pathUtils.join(pythonRoot, fullFileName);
+    }
+    
+    // Normalize the final path
+    filePath = pathUtils.normalize(filePath);
+    console.log('Normalized file path:', filePath);
+    
+    // Check if file already exists at the path
+    if (files.some(file => file.path === filePath)) {
+      showToast(`File ${fullFileName} already exists at this location`);
+      return;
+    }
+    
+    // Create new file
+    const newFile: FileData = {
+      name: fullFileName,
+      content: defaultContent,
+      language,
+      path: filePath
+    };
+    
+    // Update UI first
+    setFiles(prev => [...prev, newFile]);
+    addTab(fullFileName);
+    setActiveFile(fullFileName);
+    
+    // If we have a Python folder open, try to save the file immediately
+    if (pythonFolderHandle) {
+      try {
+        console.log('Ensuring directory exists for path:', filePath);
+        // Ensure parent directory exists first
+        const parentDirPath = pathUtils.dirname(filePath);
+        const relativeDirPath = pathUtils.relativePath(`/${PYTHON_FOLDER_NAME}`, parentDirPath);
+        console.log('Parent directory path:', parentDirPath);
+        console.log('Relative directory path:', relativeDirPath);
+        
+        // Create directory path if needed
+        if (relativeDirPath !== '/') {
+          await createDirectories(pythonFolderHandle, relativeDirPath.substring(1)); // Remove leading slash
+        }
+        
+        // Then save the file
+        console.log('Saving file with path:', filePath);
+        const success = await saveFile(newFile);
+        console.log('File saved successfully:', success);
+        
+        if (success) {
+          showToast(`Created and saved ${fullFileName}`);
+          
+          // Refresh the file list to update any filehandles
+          const updatedFiles = await loadFilesFromPythonFolder(pythonFolderHandle);
+          setFiles(prev => {
+            // Preserve the currently edited file content
+            const currentEditedFile = prev.find(f => f.path === filePath);
+            return updatedFiles.map(f => 
+              f.path === filePath && currentEditedFile 
+                ? {...f, content: currentEditedFile.content} 
+                : f
+            );
+          });
+        } else {
+          showToast(`Created ${fullFileName} but failed to save to filesystem`);
+        }
+      } catch (err) {
+        console.error('Error creating file:', err);
+        showToast(`Error creating file: ${(err as Error).message}`);
+      }
+    } else {
+      showToast(`Created ${fullFileName} (not saved to filesystem)`);
+    }
+  };
+
+  // Enhanced function to ensure a directory path exists
+  const ensureDirectoryExists = async (filePath: string): Promise<FileSystemDirectoryHandle | null> => {
+    if (!pythonFolderHandle) return null;
+    
+    try {
+      console.log('ensureDirectoryExists for path:', filePath);
+      // Parse the path to get directory segments
+      const pathParts = filePath.split('/').filter(Boolean);
+      
+      // Remove the filename from the end and the Python folder from the start
+      const dirSegments = pathParts.slice(1, -1); // Skip python folder and filename
+      
+      console.log('Directory segments to create:', dirSegments);
+      
+      if (dirSegments.length === 0) {
+        // No directories to create, file is directly in python folder
+        console.log('No directories to create, file will be in Python folder root');
+        return pythonFolderHandle;
+      }
+      
+      let currentDir = pythonFolderHandle;
+      let createdDirs = false;
+      
+      // Create each directory level if it doesn't exist
+      for (let i = 0; i < dirSegments.length; i++) {
+        const segment = dirSegments[i];
+        try {
+          console.log(`Creating directory segment: "${segment}"`);
+          // @ts-ignore
+          currentDir = await currentDir.getDirectoryHandle(segment, { create: true });
+          createdDirs = true;
+          console.log(`Successfully created/accessed directory: ${segment}`);
+        } catch (err) {
+          console.error(`Error creating directory ${segment}:`, err);
+          showToast(`Error creating directory ${segment}: ${(err as Error).message}`);
+          return null;
+        }
+      }
+      
+      if (createdDirs) {
+        console.log('Created directory structure successfully');
+        // Refresh file list to show the new directory structure
+        const updatedFiles = await loadFilesFromPythonFolder(pythonFolderHandle);
+        setFiles(prev => {
+          // Preserve currently edited files
+          const editedFiles = prev.filter(f => !f.isDirectory && !updatedFiles.some(u => u.path === f.path));
+          return [...updatedFiles, ...editedFiles];
+        });
+      }
+      
+      return currentDir;
+    } catch (err) {
+      console.error('Error ensuring directory exists:', err);
+      return null;
+    }
+  };
+
+  // Function to create a new folder in the current directory
+  const createNewFolder = async (folderName: string, parentPath: string = '') => {
+    try {
+      if (!pythonFolderHandle) {
+        showToast(`No ${PYTHON_FOLDER_NAME} folder available. Please open a directory first.`);
+        return false;
+      }
+
+      if (!folderName) {
+        showToast("Please provide a folder name");
+        return false;
+      }
+
+      console.log('Creating folder:', folderName, 'at parent path:', parentPath);
+      
+      // Start with the Python folder
+      let currentDir = pythonFolderHandle;
+      
+      // Process parent path to make sure it's relative to the Python folder
+      if (parentPath) {
+        const pathSegments = parentPath.split('/').filter(Boolean);
+        
+        // Skip the Python folder name if it's the first segment
+        const startIndex = pathSegments[0] === PYTHON_FOLDER_NAME ? 1 : 0;
+        
+        // Navigate to each directory segment
+        for (let i = startIndex; i < pathSegments.length; i++) {
+          try {
+            // @ts-ignore
+            currentDir = await currentDir.getDirectoryHandle(pathSegments[i], { create: true });
+            console.log(`Navigated to directory: ${pathSegments[i]}`);
+          } catch (err) {
+            console.error(`Error navigating to directory ${pathSegments[i]}:`, err);
+            showToast(`Error navigating to directory ${pathSegments[i]}: ${(err as Error).message}`);
+            return false;
+          }
+        }
+      }
+
+      // Create the new folder in the current directory
+      try {
+        // @ts-ignore
+        await currentDir.getDirectoryHandle(folderName, { create: true });
+        console.log('Created folder:', folderName);
+        
+        // Construct the full path for the UI
+        let fullPath: string;
+        if (parentPath) {
+          if (parentPath.startsWith(`/${PYTHON_FOLDER_NAME}`)) {
+            fullPath = `${parentPath}/${folderName}`;
+          } else {
+            fullPath = `/${PYTHON_FOLDER_NAME}${parentPath}/${folderName}`;
+          }
+        } else {
+          fullPath = `/${PYTHON_FOLDER_NAME}/${folderName}`;
+        }
+        
+        // Add to the files state
+        const newFolderData: FileData = {
+          name: folderName,
+          content: '',
+          language: '',
+          path: fullPath,
+          isDirectory: true
+        };
+        
+        setFiles(prev => [...prev, newFolderData]);
+        showToast(`Created folder: ${folderName}`);
+        
+        // Refresh the file list to ensure we have the latest structure
+        if (pythonFolderHandle) {
+          const updatedFiles = await loadFilesFromPythonFolder(pythonFolderHandle);
+          setFiles(updatedFiles);
+        }
+        
+        return true;
+      } catch (err) {
+        console.error('Error creating folder:', err);
+        showToast(`Error creating folder: ${(err as Error).message}`);
+        return false;
+      }
+    } catch (err) {
+      console.error('Error in createNewFolder:', err);
+      showToast(`Error creating folder: ${(err as Error).message}`);
+      return false;
+    }
+  };
+
+  // Function to delete a file
+  const deleteFile = async (fileName: string, filePath: string) => {
+    try {
+      console.log('Deleting file:', fileName, 'at path:', filePath);
+      
+      // If we have a Python folder handle, try to delete the actual file
+      if (pythonFolderHandle && filePath) {
+        // Find file from path
+        const fileToDelete = files.find(file => file.path === filePath);
+        
+        if (fileToDelete && fileToDelete.fileHandle) {
+          try {
+            // Delete the file from the filesystem
+            // @ts-ignore
+            await fileToDelete.fileHandle.remove();
+            console.log('File deleted from filesystem');
+            showToast(`Deleted ${fileName} from filesystem`);
+          } catch (err) {
+            console.error('Error deleting file from filesystem:', err);
+          }
+        } else {
+          // If we don't have a file handle, try to navigate to the file and delete it
+          try {
+            const pathSegments = filePath.split('/').filter(Boolean);
+            
+            // Skip the Python folder name if it's the first segment
+            const startIndex = pathSegments[0] === PYTHON_FOLDER_NAME ? 1 : 0;
+            
+            // The last segment is the file name
+            const targetFileName = pathSegments[pathSegments.length - 1];
+            let currentDir = pythonFolderHandle;
+            
+            // Navigate to the directory containing the file
+            for (let i = startIndex; i < pathSegments.length - 1; i++) {
+              // @ts-ignore
+              currentDir = await currentDir.getDirectoryHandle(pathSegments[i]);
+            }
+            
+            // Now try to delete the file
+            // @ts-ignore
+            const fileHandle = await currentDir.getFileHandle(targetFileName);
+            // @ts-ignore
+            await fileHandle.remove();
+            console.log('File deleted using path navigation');
+            showToast(`Deleted ${fileName} from filesystem`);
+          } catch (err) {
+            console.error('Error deleting file using path navigation:', err);
+          }
+        }
+      }
+      
+      // Handle UI updates
+      // Check if file is active and if there are other tabs
+      if (activeFile === fileName && activeTabs.length > 1) {
+        const newActiveTabs = activeTabs.filter(tab => tab !== fileName);
+        setActiveTabs(newActiveTabs);
+        setActiveFile(newActiveTabs[0]);
+      } else if (activeFile === fileName) {
+        // If it's the only tab, create a new default Python file
+        createNewFile('untitled', 'py');
+        setActiveTabs(['untitled.py']);
+        setActiveFile('untitled.py');
+      }
+      
+      // Remove from tabs if it exists
+      if (activeTabs.includes(fileName)) {
+        setActiveTabs(activeTabs.filter(tab => tab !== fileName));
+      }
+      
+      // Remove the file from state
+      setFiles(files.filter(file => file.path !== filePath));
+      
+      // Refresh the file list to ensure we have the latest structure
+      if (pythonFolderHandle) {
+        const updatedFiles = await loadFilesFromPythonFolder(pythonFolderHandle);
+        setFiles(updatedFiles);
+      }
+      
+    } catch (err) {
+      console.error('Error during file deletion:', err);
+      showToast(`Error deleting file: ${(err as Error).message}`);
+    }
+  };
 
   const toggleExpand = (item: string) => {
     setExpandedItems(prev => 
@@ -94,19 +855,24 @@ function App() {
     );
   };
 
-  const addTab = (fileName: string) => {
+  const addTab = (fileName: string, filePath?: string) => {
     if (!activeTabs.includes(fileName)) {
       setActiveTabs([...activeTabs, fileName]);
     }
-    setActiveSection(fileName.split('.')[0]);
+    setActiveFile(fileName);
   };
 
   const closeTab = (fileName: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const newTabs = activeTabs.filter(tab => tab !== fileName);
     setActiveTabs(newTabs);
-    if (newTabs.length > 0) {
-      setActiveSection(newTabs[newTabs.length - 1].split('.')[0]);
+    if (newTabs.length > 0 && activeFile === fileName) {
+      setActiveFile(newTabs[newTabs.length - 1]);
+    } else if (newTabs.length === 0) {
+      // If all tabs are closed, create a default file
+      createNewFile('untitled', 'py');
+      setActiveTabs(['untitled.py']);
+      setActiveFile('untitled.py');
     }
   };
 
@@ -116,15 +882,8 @@ function App() {
     setTimeout(() => setShowNotification(false), 3000);
   };
 
-  // Handle mobile menu toggle
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
-
-  // Close mobile menu when a section is selected
-  useEffect(() => {
-    setIsMobileMenuOpen(false);
-  }, [activeSection]);
+  // Get the currently active file data
+  const currentFileData = files.find(file => file.name === activeFile) || files[0];
 
   return (
     <div className="h-screen bg-[#1e1e1e] text-gray-300 flex flex-col overflow-hidden">
@@ -133,370 +892,90 @@ function App() {
         <Notification message={notificationMessage} />
       )}
       
-      {/* Desktop Mode Hint - Fixed position with animation */}
-      {isMobile && showDesktopHint && (
-        <div className="fixed top-12 right-4 z-50 bg-blue-600 text-white px-3 py-2 rounded-md shadow-lg text-sm max-w-[180px] flex items-center animate-fadeIn">
-          <Monitor size={16} className="mr-2 flex-shrink-0" />
-          <span>Switch to desktop mode for all features</span>
-          <button 
-            className="ml-2 text-white/80 hover:text-white"
-            onClick={() => setShowDesktopHint(false)}
-          >
-            ×
-          </button>
-        </div>
-      )}
-      
-      {/* Fixed Header Section - Scaled down for mobile */}
-      <div className={`fixed top-0 left-0 right-0 z-50 ${isMobile ? 'h-8' : ''}`}>
-        <div className={isMobile ? 'transform scale-75 origin-top-left' : ''}>
-          <MenuBar />
-        </div>
+      {/* Fixed Header Section */}
+      <div className="fixed top-0 left-0 right-0 z-50">
+        <MenuBar />
       </div>
 
-      {/* Mobile Menu Button - adjusted top position */}
-      <button
-        className="md:hidden fixed left-4 top-20 z-10 bg-[#2d2d2d] p-2 rounded-full shadow-lg hover:bg-[#3d3d3d] transition-colors"
-        onClick={toggleMobileMenu}
-        aria-label="Toggle mobile menu"
-      >
-        <MenuIcon className="w-5 h-5 text-blue-400" />
-      </button>
+      {/* Content area */}
+      <div className="flex flex-1 pt-8 overflow-hidden">
+        <ActivityBar 
+          activeSection={activeSection} 
+          setActiveSection={setActiveSection}
+          errorCount={errorCount}
+          warningCount={warningCount}
+        />
 
-      {/* Mobile Navigation Overlay */}
-
-      {isMobileMenuOpen && (
-  <div 
-    className="md:hidden fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm z-30 transition-opacity duration-300" 
-    onClick={() => setIsMobileMenuOpen(false)}
-  >
-    <div 
-      className="bg-[#1e1e1e] w-4/5 h-full border-r border-[#3c3c3c] p-4 overflow-y-auto shadow-2xl transform transition-transform duration-300 ease-out flex flex-col"
-      style={{ boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}
-      onClick={e => e.stopPropagation()}
-    >
-      {/* Explorer header with search bar like desktop version */}
-      <div className="flex justify-between items-center mb-4 border-b border-[#3c3c3c] pb-2">
-        <h3 className="text-sm uppercase font-semibold text-gray-300">Explorer</h3>
-        <div className="flex items-center gap-1">
-          <button className="text-gray-400 hover:text-white p-1 rounded hover:bg-[#3c3c3c]">
-            <PlusCircle size={14} />
-          </button>
-          <button className="text-gray-400 hover:text-white p-1 rounded hover:bg-[#3c3c3c]">
-            <MoreHorizontal size={14} />
-          </button>
-          <button 
-            className="text-gray-400 hover:text-white p-1 rounded hover:bg-[#3c3c3c]"
-            onClick={() => setIsMobileMenuOpen(false)}
-            aria-label="Close menu"
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-      
-      {/* Search bar - matches desktop explorer */}
-      <div className="mb-4">
-        <div className="flex items-center bg-[#3c3c3c] rounded px-2 py-1 hover:bg-[#4c4c4c] transition-colors">
-          <Search size={14} className="text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search"
-            className="bg-transparent border-none focus:outline-none text-sm ml-2 w-full text-gray-200"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
-      
-      {/* OPEN EDITORS section with chevron */}
-      <div 
-        className="flex items-center space-x-2 cursor-pointer hover:bg-[#37373d] p-1 rounded transition-colors mb-1"
-        onClick={() => toggleExpand('OPEN_EDITORS')}
-      >
-        {expandedItems.includes('OPEN_EDITORS') ? (
-          <ChevronDown size={14} className="text-gray-400" />
-        ) : (
-          <ChevronRight size={14} className="text-gray-400" />
-        )}
-        <span className="text-gray-300 text-xs font-medium">OPEN EDITORS</span>
-      </div>
-      
-      {/* Open editors list - only show current active section */}
-      {expandedItems.includes('OPEN_EDITORS') && (
-        <div className="ml-4 space-y-1 mb-3">
-          {['about', 'experience', 'projects', 'education', 'achievements', 'research']
-            .filter(section => activeSection === section)
-            .map(section => (
-              <button
-                key={section}
-                className="flex items-center w-full px-2 py-1 rounded text-sm bg-[#37373d] border-l-2 border-blue-500"
-                onClick={() => {
-                  setActiveSection(section);
-                  if (section !== 'about') {
-                    addTab(`${section}.js`);
-                  }
-                }}
-              >
-                <div className="w-4 h-4 mr-2 flex-shrink-0">
-                  <span className={`block w-3 h-3 rounded-sm ${
-                    section === 'about' ? 'bg-blue-500' :
-                    section === 'experience' ? 'bg-green-500' :
-                    section === 'projects' ? 'bg-yellow-500' :
-                    section === 'education' ? 'bg-purple-500' :
-                    section === 'achievements' ? 'bg-red-500' : 'bg-cyan-500'
-                  }`}></span>
-                </div>
-                <span className="capitalize">{section}.js</span>
-              </button>
-          ))}
-        </div>
-      )}
-      
-      {/* PORTFOLIO section with chevron */}
-      <div className="flex items-center space-x-2 p-1 rounded transition-colors mb-1">
-  <ChevronDown size={14} className="text-gray-400" />
-  <span className="text-xs font-medium text-blue-300">PORTFOLIO</span>
-</div>
-
-<div className="ml-4 space-y-1 mt-1 mb-4">
-  <div className="flex items-center space-x-2 p-1 rounded transition-colors">
-    <ChevronDown size={14} className="text-gray-400" />
-    <FolderOpen size={14} className="text-yellow-500" />
-    <span className="text-sm">src</span>
-  </div>
-
-  <div className="ml-4 space-y-1 mt-1">
-    {[
-      { name: 'about', icon: <User size={14} className="mr-2 text-blue-500" /> },
-      { name: 'experience', icon: <Briefcase size={14} className="mr-2 text-green-500" /> },
-      { name: 'projects', icon: <Code size={14} className="mr-2 text-yellow-500" /> },
-      { name: 'education', icon: <GraduationCap size={14} className="mr-2 text-purple-500" /> },
-      { name: 'achievements', icon: <Trophy size={14} className="mr-2 text-red-500" /> },
-      { name: 'research', icon: <BookOpen size={14} className="mr-2 text-cyan-500" /> },
-    ].map(({ name, icon }) => (
-      <button
-        key={name}
-        className={`flex items-center w-full px-2 py-1 rounded text-sm ${
-          activeSection === name 
-            ? 'bg-[#094771] text-white font-medium' 
-            : 'hover:bg-[#37373d] text-gray-300'
-        } transition-all duration-200`}
-        onClick={() => {
-          setActiveSection(name);
-          if (name !== 'about') {
-            addTab(`${name}.js`);
-          }
-        }}
-      >
-        {icon}
-        <span className="capitalize">{name}.js</span>
-      </button>
-    ))}
-  </div>
-</div>
-      
-      {/* Portfolio file structure */}
-      {expandedItems.includes('PORTFOLIO') && (
-        <div className="ml-4 space-y-1 mt-1 mb-4">
-          <div 
-            className="flex items-center space-x-2 cursor-pointer hover:bg-[#37373d] p-1 rounded transition-colors"
-            onClick={() => toggleExpand('SRC')}
-          >
-            {expandedItems.includes('SRC') ? (
-              <>
-                <ChevronDown size={14} className="text-gray-400" />
-                <FolderOpen size={14} className="text-yellow-500" />
-                <span className="text-sm">src</span>
-              </>
-            ) : (
-              <>
-                <ChevronRight size={14} className="text-gray-400" />
-                <Folder size={14} className="text-yellow-500" />
-                <span className="text-sm">src</span>
-              </>
-            )}
-          </div>
-          
-          {expandedItems.includes('SRC') && (
-            <div className="ml-4 space-y-1 mt-1">
-              {['about', 'experience', 'projects', 'education', 'achievements', 'research'].map(section => (
-                <button
-                  key={section}
-                  className={`flex items-center w-full px-2 py-1 rounded text-sm ${
-                    activeSection === section 
-                      ? 'bg-[#094771] text-white font-medium' 
-                      : 'hover:bg-[#37373d] text-gray-300'
-                  } transition-all duration-200`}
-                  onClick={() => {
-                    setActiveSection(section);
-                    if (section !== 'about') {
-                      addTab(`${section}.js`);
-                    }
-                  }}
-                >
-                  <div className="w-4 h-4 mr-2 flex-shrink-0">
-                    <span className={`block w-3 h-3 rounded-sm ${
-                      section === 'about' ? 'bg-blue-500' :
-                      section === 'experience' ? 'bg-green-500' :
-                      section === 'projects' ? 'bg-yellow-500' :
-                      section === 'education' ? 'bg-purple-500' :
-                      section === 'achievements' ? 'bg-red-500' : 'bg-cyan-500'
-                    }`}></span>
-                  </div>
-                  <span className="capitalize">{section}.js</span>
-                </button>
-              ))}
-            </div>
-          )}
-          
-          {/* Config files */}
-          <div className="flex items-center space-x-2 cursor-pointer hover:bg-[#37373d] p-1 rounded transition-colors">
-            <FileCode size={14} className="text-gray-500" />
-            <span className="text-sm">package.json</span>
-          </div>
-          
-          <div className="flex items-center space-x-2 cursor-pointer hover:bg-[#37373d] p-1 rounded transition-colors">
-            <FileCode size={14} className="text-gray-500" />
-            <span className="text-sm">tsconfig.json</span>
-          </div>
-        </div>
-      )}
-      
-      {/* Desktop mode suggestion with VS Code notification styling */}
-      <div className="mt-auto p-3 bg-[#252526] rounded border-l-2 border-blue-500 shadow-md text-sm">
-        <div className="flex items-center text-blue-400 mb-1.5">
-          <Monitor size={15} className="mr-2 flex-shrink-0" />
-          <span className="font-medium">Pro Tip</span>
-        </div>
-        <p className="text-gray-300 ml-7 text-xs leading-relaxed">
-          Switch to desktop mode to access all IDE features including terminal, code explorer, and GitHub Copilot integration.
-        </p>
-      </div>
-
-      {/* VS Code style footer */}
-      <div className="mt-4 border-t border-[#3c3c3c] py-2 text-xs text-gray-500">
-        <div className="flex items-center">
-          <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
-          <span>VS Code Portfolio - v1.0.0</span>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-      {/* Content area - adjusted margins */}
-      <div className={`flex flex-1 ${isMobile ? 'pt-8' : 'pt-8'} overflow-hidden`}>
-        {/* Hide ActivityBar and Explorer on mobile */}
-        <div className="hidden md:block">
-          <ActivityBar 
-            activeSection={activeSection} 
-            setActiveSection={setActiveSection}
-            errorCount={errorCount}
-            warningCount={warningCount}
-          />
-        </div>
-
-        <div className="hidden md:block">
-          <Explorer 
-            expandedItems={expandedItems}
-            toggleExpand={toggleExpand}
-            activeSection={activeSection}
-            setActiveSection={setActiveSection}
-            addTab={addTab}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-          />
-        </div>
+        <Explorer 
+          expandedItems={expandedItems}
+          toggleExpand={toggleExpand}
+          activeFile={activeFile}
+          setActiveFile={setActiveFile}
+          files={files}
+          addTab={addTab}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          createNewFile={createNewFile}
+          deleteFile={deleteFile}
+          createNewFolder={createNewFolder}
+        />
 
         <div className="flex-1 relative flex flex-col">
-          <div className={`md:ml-72 ml-0 flex flex-1 flex-col h-full relative ${isMobile ? 'pt-2' : ''}`}>
-            {/* Make tabs more compact on mobile */}
-            <div className={isMobile ? 'transform scale-90 origin-top-left' : ''}>
-              <EditorTabs 
-                activeTabs={activeTabs}
-                activeSection={activeSection}
-                setActiveSection={setActiveSection}
-                closeTab={closeTab}
-              />
-            </div>
+          <div className="ml-72 flex flex-1 flex-col h-full relative">
+            <EditorTabs 
+              activeTabs={activeTabs}
+              activeFile={activeFile}
+              setActiveFile={setActiveFile}
+              closeTab={closeTab}
+              files={files}
+            />
             
-            {/* Only show breadcrumbs on desktop */}
-            {showBreadcrumbs && !isMobile && (
-              <Breadcrumbs activeSection={activeSection} />
-            )}
-            
-            {/* Only show editor pills on desktop */}
-            {!isMobile && (
-              <EditorPills 
-                activePill={activePill}
-                setActivePill={setActivePill}
-              />
+            {showBreadcrumbs && (
+              <Breadcrumbs activeSection={currentFileData.path} />
             )}
 
             {/* Scrollable content area with proper padding */}
             <div className="flex-1 overflow-y-auto custom-scrollbar pt-0 relative">
-              {/* Add VS Code-like indent guides (only on desktop) */}
-              {!isMobile && (
-                <div className="absolute top-0 left-12 bottom-0 w-6 flex flex-col items-center z-0 pointer-events-none">
-                  <div className="h-full w-px bg-[#3c3c3c] opacity-30"></div>
-                </div>
-              )}
-              
-              {/* Main content with proper padding */}
-              <div className={`px-4 py-6 relative ${!isMobile ? 'mb-64' : 'mb-10'}`}>
-                <div className={`${animateContent ? 'opacity-0' : 'opacity-100'} transition-all ${isMobile ? 'pl-1 pr-1' : 'md:pl-12 md:pr-20'}`}>
-                  {activeSection === 'about' && (
-                    <ProfileHeader showToast={showToast} />
-                  )}
-
-                  {activeSection === 'experience' && (
-                    <ExperienceSection data={experienceData} />
-                  )}
-
-                  {activeSection === 'projects' && (
-                    <ProjectsSection data={projectsData} showToast={showToast} />
-                  )}
-
-                  {activeSection === 'education' && (
-                    <EducationSection data={educationData} />
-                  )}
-
-                  {activeSection === 'achievements' && (
-                    <AchievementsSection data={achievementsData} />
-                  )}
-
-                  {activeSection === 'research' && (
-                    <ResearchSection data={researchData} />
-                  )}
-                </div>
+              {/* Add VS Code-like indent guides */}
+              <div className="absolute top-0 left-12 bottom-0 w-6 flex flex-col items-center z-0 pointer-events-none">
+                <div className="h-full w-px bg-[#3c3c3c] opacity-30"></div>
               </div>
               
+              {/* Code Editor takes full space */}
+              <div className="h-full">
+                <CodeEditor 
+                  activeFile={activeFile}
+                  content={currentFileData.content}
+                  language={currentFileData.language}
+                  showLineNumbers={showLineNumbers}
+                  onChange={(newContent) => updateFileContent(activeFile, newContent)}
+                />
+              </div>
             </div>
-                    {/* Terminal Section - only show on desktop */}
-        {!isMobile && (
-          <TerminalSection />
-        )}
+
+            {/* Terminal Section */}
+            <TerminalSection />
           </div>
 
-          {/* Minimap overlay - only show on desktop */}
-          {showMinimap && !isMobile && (
+          {/* Minimap overlay */}
+          {showMinimap && (
             <Copilot />
           )}
-                  {/* Terminal Section - only show on desktop */}
-
         </div>
-
-
       </div>
 
-      {/* Status Bar - adjust z-index to be above terminal and scaled for mobile */}
-      <div className={isMobile ? 'transform scale-75 origin-bottom-left' : ''}>
-        <StatusBar 
-          gitBranch={gitBranch}
-          errorCount={errorCount}
-          warningCount={warningCount}
-        />
-      </div>
+      {/* Status Bar */}
+      <StatusBar 
+        gitBranch={gitBranch}
+        errorCount={errorCount}
+        warningCount={warningCount}
+        language={currentFileData.language}
+        fileName={activeFile}
+        lastSaved={currentFileData.lastSaved}
+        autoSave={autoSave}
+        hasFileAccess={!!pythonFolderHandle}
+        onSave={() => saveFile(currentFileData)}
+      />
 
       {/* Global styles */}
       <style jsx global>{`
@@ -542,24 +1021,6 @@ function App() {
           left: 0;
           height: 100%;
           border-left: 1px solid rgba(60, 60, 60, 0.3);
-        }
-        
-        /* Mobile optimization */
-        @media (max-width: 767px) {
-          .custom-scrollbar {
-            -webkit-overflow-scrolling: touch;
-          }
-          
-          /* Adjust content display for mobile */
-          .mobile-content {
-            padding: 0.5rem !important;
-          }
-          
-          /* Status bar mobile styling */
-          .status-bar-mobile {
-            height: 1.5rem;
-            font-size: 0.75rem;
-          }
         }
       `}</style>
     </div>

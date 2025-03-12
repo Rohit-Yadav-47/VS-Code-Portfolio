@@ -1,25 +1,22 @@
 import React, { useState } from 'react';
-import { 
-  FileCode, 
-  Code, 
-  GraduationCap, 
-  Trophy, 
-  BookOpen, 
-  User, 
-  Settings, 
-  Search, 
-  GitBranch, 
-  BellRing, 
+import {
+  File,
+  Search,
+  GitBranch,
   Bug,
-  ExternalLink,
-  Briefcase
+  LayoutDashboard,
+  Terminal,
+  Settings,
+  User,
+  Briefcase,
+  Code,
+  GraduationCap,
+  BookOpen,
 } from 'lucide-react';
 
 interface ActivityBarProps {
   activeSection: string;
   setActiveSection: (section: string) => void;
-  errorCount?: number;
-  warningCount?: number;
   username?: string;
   avatarUrl?: string;
 }
@@ -34,94 +31,90 @@ type IconItem = {
   isImplemented?: boolean;
 };
 
-const ActivityBar: React.FC<ActivityBarProps> = ({ 
-  activeSection, 
+const ActivityBar: React.FC<ActivityBarProps> = ({
+  activeSection,
   setActiveSection,
-  errorCount = 0,
-  warningCount = 0,
   username = 'Rohit',
-  avatarUrl
+  avatarUrl,
 }) => {
-  const [notificationCount] = useState<number>(3);
-  
-  // Update primary icons to match Explorer
+  const [searchVisible, setSearchVisible] = useState<boolean>(false);
+  const [sourceControlVisible, setSourceControlVisible] = useState<boolean>(false);
+
   const primaryIcons: IconItem[] = [
     {
-      id: 'about',
-      icon: User,
-      tooltip: 'About Me',
-      shortcut: 'Ctrl+1',
-      isImplemented: true
+      id: 'explorer',
+      icon: File,
+      tooltip: 'Explorer',
+      shortcut: 'Ctrl+Shift+E',
+      isImplemented: true,
     },
-    { 
-      id: 'experience',
-      icon: Briefcase, // Changed from Code to Briefcase
-      tooltip: 'Experience', 
-      shortcut: 'Ctrl+2',
-      isImplemented: true
-    },
-    { 
-      id: 'projects',
-      icon: Code, // Changed from GraduationCap to Code
-      tooltip: 'Projects', 
-      shortcut: 'Ctrl+3',
-      isImplemented: true
-    },
-    { 
-      id: 'education',
-      icon: GraduationCap, // Changed from Trophy to GraduationCap
-      tooltip: 'Education', 
-      shortcut: 'Ctrl+4',
-      isImplemented: true
-    },
-    { 
-      id: 'achievements',
-      icon: Trophy,
-      tooltip: 'Achievements', 
-      shortcut: 'Ctrl+5',
-      isImplemented: true
-    },
-    { 
-      id: 'research',
-      icon: BookOpen,
-      tooltip: 'Research', 
-      shortcut: 'Ctrl+6',
-      isImplemented: true
-    }
-  ];
-  
-  // Future/disabled features
-  const secondaryIcons: IconItem[] = [
-    { 
-      id: 'search', 
-      icon: Search, 
-      tooltip: 'Search', 
+    {
+      id: 'search',
+      icon: Search,
+      tooltip: 'Search',
       shortcut: 'Ctrl+Shift+F',
-      isImplemented: false
+      isImplemented: true,
     },
-    { 
-      id: 'sourceControl', 
-      icon: GitBranch, 
-      tooltip: 'Source Control', 
+    {
+      id: 'sourceControl',
+      icon: GitBranch,
+      tooltip: 'Source Control',
       badge: 2,
       badgeColor: 'bg-blue-500',
-      isImplemented: false
-    }
+      isImplemented: true,
+    },
+    {
+      id: 'runAndDebug',
+      icon: Bug,
+      tooltip: 'Run and Debug',
+      shortcut: 'Ctrl+Shift+D',
+      isImplemented: true,
+    },
+    {
+      id: 'extensions',
+      icon: LayoutDashboard,
+      tooltip: 'Extensions',
+      shortcut: 'Ctrl+Shift+X',
+      isImplemented: true,
+    },
+    {
+      id: 'terminal',
+      icon: Terminal,
+      tooltip: 'Terminal',
+      shortcut: 'Ctrl+`',
+      isImplemented: true,
+    },
   ];
+
+  const handleIconClick = (itemId: string) => {
+    if (itemId === 'search') {
+      setSearchVisible(!searchVisible);
+      if (!searchVisible) {
+        setActiveSection(itemId);
+      }
+    } else if (itemId === 'sourceControl') {
+      setSourceControlVisible(!sourceControlVisible);
+      if (!sourceControlVisible) {
+        setActiveSection(itemId);
+      }
+    } else {
+      setActiveSection(itemId);
+    }
+  };
 
   const renderIconItem = (item: IconItem) => (
     <div key={item.id} className="relative group">
-      <div 
+      <div
         className={`w-12 flex items-center justify-center ${
           activeSection === item.id ? 'border-l-2 border-blue-500 bg-[#3c3c3c]' : ''
         } ${!item.isImplemented ? 'opacity-50' : ''}`}
         style={{ height: '40px' }}
       >
-        <item.icon 
+        <item.icon
           className={`w-5 h-5 cursor-pointer ${
             activeSection === item.id ? 'text-white' : 'text-gray-400'
           } ${item.isImplemented ? 'hover:text-white' : ''} transition-colors duration-200`}
-          onClick={() => item.isImplemented && setActiveSection(item.id)}
+          onClick={() => item.isImplemented && handleIconClick(item.id)}
         />
         {item.badge && (
           <div className={`absolute top-0 right-1 ${item.badgeColor || 'bg-red-500'} text-white text-xs rounded-full h-4 min-w-4 px-1 flex items-center justify-center`}>
@@ -129,8 +122,7 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
           </div>
         )}
       </div>
-      
-      {/* Tooltip */}
+
       <div className="absolute left-full ml-2 px-2 py-1 bg-[#252526] text-xs rounded opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-30 shadow-lg">
         <div className="font-medium">{item.tooltip}</div>
         {item.shortcut && <div className="text-gray-400 text-xs">{item.shortcut}</div>}
@@ -141,28 +133,21 @@ const ActivityBar: React.FC<ActivityBarProps> = ({
 
   return (
     <div className="fixed left-0 top-8 bottom-6 w-12 bg-[#252526] flex flex-col items-center py-2 z-20 shadow-md md:flex hidden border-r border-[#1e1e1e]">
-      {/* Working sections */}
       <div className="flex flex-col items-center space-y-1">
         {primaryIcons.map(renderIconItem)}
       </div>
-      
-      {/* Separator */}
+
       <div className="my-4 w-8 h-px bg-gray-700"></div>
-      
-      {/* Future/disabled sections */}
-      <div className="flex flex-col items-center space-y-1">
-        {secondaryIcons.map(renderIconItem)}
-      </div>
-      
-      {/* Push account to bottom */}
+
+ 
+
       <div className="flex-1"></div>
-      
-      {/* Bottom section - unchanged */}
+
       <div className="mt-4 relative group cursor-pointer">
         {avatarUrl ? (
-          <img 
-            src={avatarUrl} 
-            alt={username} 
+          <img
+            src={avatarUrl}
+            alt={username}
             className="w-6 h-6 rounded-full border border-gray-700 hover:border-blue-500 transition-colors duration-200"
           />
         ) : (
