@@ -7,7 +7,7 @@ export const experienceData: Experience[] = [
     points: [
       "Developed a secure Browser extension with Admin portal enabling customized feedback collection for specific applications and user groups, capable of 20K+ daily interactions with ServiceNow/JIRA integration.",
       "Engineered a fine-tuned LLM pipeline that analyzes feedback sentiment and auto-generates concise action items, reducing insight generation time by 65% while improving categorization accuracy to 90%.",
-      "Implemented an intelligent routing system with role-based workflows, resulting in 40% faster issue resolution and automated assignment across departments."
+      "Implemented an intelligent routing system with role-based workflows, resulting in faster issue resolution and automated assignment across departments."
     ],
     isActive: true
   },
