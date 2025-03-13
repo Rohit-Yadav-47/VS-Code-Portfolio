@@ -2,6 +2,8 @@
 
 An innovative portfolio website that replicates the Visual Studio Code interface while incorporating advanced AI features for interactive user engagement. Built with React, TypeScript, and Google's Gemini AI.
 
+https://yrohit.site/
+
 ![screenshot (4)](https://github.com/user-attachments/assets/1569a642-e9f2-49c3-91fb-275912fbff9b)
 
 
