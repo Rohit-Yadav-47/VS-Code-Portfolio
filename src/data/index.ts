@@ -63,7 +63,8 @@ export const projectsData: Project[] = [
   },
   {
     title: "EVENT HUB: AI-DRIVEN EVENT MANAGEMENT",
-    image: "https://i.ibb.co/1fH46WGY/421031475-e9fda511-cfcc-4e39-aa61-f504a9778e33.png",
+    image: "https://github.com/user-attachments/assets/b38571fc-0d38-457e-9cef-b57bdd7e3526",
+    link: "https://github.com/Rohit-Yadav-47/Event-Hub",
     tech: ["TypeScript", "FastAPI", "Elasticsearch", "Docker", "RAG"],
     points: [
       "Architected a high-performance RAG system achieving sub-50ms query latency through optimized vector embeddings and Elasticsearch integration.",
