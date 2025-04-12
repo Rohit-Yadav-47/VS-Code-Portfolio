@@ -36,7 +36,7 @@ export const experienceData: Experience[] = [
 export const projectsData: Project[] = [
 {
     title: "CODESENSE AI - AI-POWERED TECHNICAL INTERVIEW PLATFORM",
-    image: "https://ibb.co/6RKRF0Gj",
+    image: "https://i.ibb.co/KjtjWxBT/codesense.png",
     link: "https://github.com/Rohit-Yadav-47/Interview-Prep-AI",
     tech: ["React", "TypeScript", "TailwindCSS", "Redux", "AI Models", "Monaco Editor"],
     points: [
