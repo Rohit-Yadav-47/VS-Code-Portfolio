@@ -34,7 +34,20 @@ export const experienceData: Experience[] = [
 ];
 
 export const projectsData: Project[] = [
-
+{
+    title: "CODESENSE AI - AI-POWERED TECHNICAL INTERVIEW PLATFORM",
+    image: "https://ibb.co/6RKRF0Gj",
+    link: "https://github.com/Rohit-Yadav-47/Interview-Prep-AI",
+    tech: ["React", "TypeScript", "TailwindCSS", "Redux", "AI Models", "Monaco Editor"],
+    points: [
+      "Developed an advanced technical interview platform that simulates real-world coding interviews with AI-powered conversation and assessment",
+      "Implemented voice-enabled interface, real-time Monaco code editor, and interactive React playground for comprehensive interview preparation",
+      "Built custom code evaluation engine that provides detailed feedback on solution correctness, complexity, and quality"
+    ],
+    stars: 1,
+    forks: 0
+  },
+  
   {
     title: "WebMind AI Assistant",
     image: "https://i.ibb.co/Q3pVyd4L/420614601-f3ba8a3d-b74e-4353-9ed9-991f64b61ffa.png",
@@ -127,11 +140,13 @@ export const achievementsData: Achievement[] = [
 export const researchData: Research[] = [
   {
     title: "Smart Helmet with Crash and Wear Detection",
-    publisher: "Springer Publication"
+    publisher: "Springer Publication",
+    link:"https://link.springer.com/chapter/10.1007/978-981-97-0892-5_56"
   },
   {
     title: "ThresholdedReLU Orthogonal Layer CNN",
-    publisher: "IEEE Publication"
+    publisher: "IEEE Publication",
+    link:"https://ieeexplore.ieee.org/document/10101003"
   }
 ];
 
