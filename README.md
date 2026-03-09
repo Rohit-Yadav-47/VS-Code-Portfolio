@@ -1,6 +1,6 @@
 # VS Code-Themed Portfolio with AI Integration 🚀
 
-Live link [rohit.site](https://yrohit.site/)
+Live link [yrohit.site](https://yrohit.site/)
 
 An innovative portfolio website that replicates the Visual Studio Code interface while incorporating advanced AI features for interactive user engagement. Built with React, TypeScript, and Google's Gemini AI.
 
